@@ -2,7 +2,7 @@
   "name": "cpp-test-explorer",
   "displayName": "C++ Test Explorer",
   "description": "Google Test explorer for CMake and ROS 2 colcon workspaces.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "namo-robotics",
   "license": "MIT",
   "engines": {
@@ -184,7 +184,7 @@
         },
         "cppTestExplorer.parallelMode": {
           "type": "string",
-          "default": "executable",
+          "default": "case",
           "description": "Parallelize executables, or run each selected case in a separate process.",
           "scope": "resource",
           "enum": [

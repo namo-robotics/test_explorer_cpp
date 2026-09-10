@@ -6,7 +6,7 @@ Google Test support for VS Code's native Testing view, by **Namo Robotics** (`na
 
 ## Install and use
 
-Run `./build-vsix.sh`, then install `cpp-test-explorer-0.1.0.vsix` using **Extensions: Install from VSIX…**. The script installs locked dependencies, compiles and packages the extension. Requires Node 22+ and npm. Optional packaging arguments are forwarded, e.g. `./build-vsix.sh --out /tmp/explorer.vsix`.
+Run `./build-vsix.sh`, then install `cpp-test-explorer-0.1.1.vsix` using **Extensions: Install from VSIX…**. The script installs locked dependencies, compiles and packages the extension. Requires Node 22+ and npm. Optional packaging arguments are forwarded, e.g. `./build-vsix.sh --out /tmp/explorer.vsix`.
 
 Build your C++ project with testing enabled, open its workspace folder, and open VS Code's Testing view. The tree is **Workspace → Package/Project → Executable → Suite → Case**. Run all tests, any group, or a single case using the standard Testing actions.
 
@@ -27,7 +27,7 @@ Example `.vscode/settings.json`:
   "cppTestExplorer.setupScripts": ["/opt/ros/lyrical/setup.bash"],
   "cppTestExplorer.exclude": ["src/vendor", "src/experimental/**"],
   "cppTestExplorer.concurrency": 4,
-  "cppTestExplorer.parallelMode": "executable"
+  "cppTestExplorer.parallelMode": "case"
 }
 ```
 
@@ -64,7 +64,7 @@ Set both `buildDirectories` and `sourceRoots` to `[]` for manual-only discovery.
 | Setting (`cppTestExplorer.` prefix) | Default | Behavior |
 | --- | --- | --- |
 | `concurrency` | `0` | Auto: up to 4 available CPUs. Positive values set a shared process limit. The smallest resolved limit applies in multi-root workspaces. |
-| `parallelMode` | `"executable"` | Parallel binaries; `"case"` launches one process per case. |
+| `parallelMode` | `"case"` | One process per case; `"executable"` parallelizes binaries. |
 | `discoveryTimeout` | `30` | Seconds for discovery and sourcing setup files. |
 | `timeout` | `null` | Registered timeout or 60 seconds. `0` disables it. Explicit executable timeout takes precedence. |
 | `runDisabled` | `false` | Show disabled cases but skip ordinary runs; enable to run them. Explicit debugging enables disabled tests. |

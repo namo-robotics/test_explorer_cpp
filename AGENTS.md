@@ -15,4 +15,9 @@ A file for guiding coding agents.
 ## Issues and PR Guidelines
 
 - Never create PRs or issues unless specifically asked by the user.
-- Commit and PR message rules live in `.github/git-commit-instructions.md`; read it only when asked to write one.
+
+# Commit Message Guidelines
+
+- Subject: `<scope>: <description>` (scope = subsystem/package/area; imperative; no `feat`/`fix` types).
+- Body: blank line, then one concise bullet per key change if not already captured in the subject.
+- Do not add AI attribution to commits or PRs (no Co-Authored-By, Generated-with, tool names, or session links).

@@ -11,7 +11,7 @@ export function settingsFor(folder: vscode.WorkspaceFolder): Settings {
     buildDirectories: config.get('buildDirectories', ['build']), buildConfiguration: config.get('buildConfiguration', ''),
     ctestPath: config.get('ctestPath', 'ctest'), executables: config.get('executables', []), exclude: config.get('exclude', []),
     setupScripts: config.get('setupScripts', []), autoSourceWorkspace: config.get('autoSourceWorkspace', true), env: config.get('env', {}),
-    concurrency: config.get('concurrency', 0), parallelMode: config.get('parallelMode', 'executable'),
+    concurrency: config.get('concurrency', 0), parallelMode: config.get('parallelMode', 'case'),
     discoveryTimeout: config.get('discoveryTimeout', 30), timeout: config.get('timeout', null), runDisabled: config.get('runDisabled', false),
     debug: config.get('debug', { lldb: {}, cppdbg: {} }),
   };

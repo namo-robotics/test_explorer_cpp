@@ -18,7 +18,7 @@ const values = (collection: vscode.TestItemCollection) => { const items: vscode.
 
 /** Own the test tree, run profiles, discovery watchers and active runs. */
 export class Explorer implements vscode.Disposable {
-  readonly controller = vscode.tests.createTestController('cppTestExplorer', 'C++ Google Tests');
+  readonly controller = vscode.tests.createTestController('cppTestExplorer', 'C++ Test Explorer');
   readonly output = vscode.window.createOutputChannel('C++ Test Explorer');
   private bindings = new Map<string, Binding>();
   private disposables: vscode.Disposable[] = [];
