@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+.vscode-test/
+*.vsix
+test/fixtures/**/build/
+test/fixtures/**/install/
+test/fixtures/**/log/
+/build/
+/install/
+/log/

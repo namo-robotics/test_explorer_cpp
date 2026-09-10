@@ -1,0 +1,28 @@
+{
+  "name": "C++ Test Explorer (ROS 2 Lyrical)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "remoteUser": "ubuntu",
+  "updateRemoteUserUID": true,
+  "workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind",
+  "workspaceFolder": "${localWorkspaceFolder}",
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/ubuntu/.ssh,type=bind,readonly",
+    "source=${localEnv:HOME}/.config/gh,target=/home/ubuntu/.config/gh,type=bind",
+    "source=${localEnv:HOME}/.claude,target=/home/ubuntu/.claude,type=bind",
+    "source=${localEnv:HOME}/.claude.json,target=/home/ubuntu/.claude.json,type=bind",
+    "source=${localEnv:HOME}/.codex,target=/home/ubuntu/.codex,type=bind"
+  ],
+  "init": true,
+  "capAdd": ["SYS_PTRACE"],
+  "securityOpt": ["seccomp=unconfined"],
+  "postCreateCommand": "npm ci && npm run compile",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-vscode.cpptools", "vadimcn.vscode-lldb", "anthropic.claude-code", "openai.chatgpt"],
+      "settings": { "terminal.integrated.defaultProfile.linux": "bash" }
+    }
+  }
+}

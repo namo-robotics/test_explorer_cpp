@@ -1,0 +1,34 @@
+name: Linux validation
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y cmake g++ libgtest-dev xvfb
+      - run: npm ci
+      - run: npm test
+      - run: npm run compile
+      - run: xvfb-run -a npm run test:extension
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpp-test-explorer-vsix
+          path: '*.vsix'
+  ros2:
+    runs-on: ubuntu-latest
+    container: ros:lyrical-ros-base
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: apt-get update && apt-get install -y g++ ros-lyrical-ament-cmake-gtest
+      - run: npm ci
+      - shell: bash
+        run: source /opt/ros/lyrical/setup.bash && npm run test:ros

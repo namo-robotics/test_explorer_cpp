@@ -1,0 +1,263 @@
+{
+  "name": "cpp-test-explorer",
+  "displayName": "C++ Test Explorer",
+  "description": "Google Test explorer for CMake and ROS 2 colcon workspaces.",
+  "version": "0.1.0",
+  "publisher": "namo-robotics",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Testing"
+  ],
+  "keywords": [
+    "gtest",
+    "ros2",
+    "colcon",
+    "C++"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Test discovery and execution run workspace executables and setup scripts."
+    },
+    "virtualWorkspaces": false
+  },
+  "scripts": {
+    "compile": "tsc --noEmit && esbuild src/extension.ts --bundle --platform=node --external:vscode --outfile=dist/extension.js --sourcemap",
+    "test": "tsc && node --test out/test/*.test.js",
+    "test:extension": "tsc && node out/test/host/run.js",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package",
+    "test:ros": "tsc && node out/test/ros/colcon.js"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "cppTestExplorer.refresh",
+        "title": "C++ Test Explorer: Refresh Tests"
+      },
+      {
+        "command": "cppTestExplorer.showOutput",
+        "title": "C++ Test Explorer: Show Discovery Output"
+      }
+    ],
+    "configuration": {
+      "title": "C++ Test Explorer",
+      "properties": {
+        "cppTestExplorer.sourceRoots": {
+          "type": "array",
+          "default": [
+            "src"
+          ],
+          "description": "ROS package source roots, relative to the workspace folder.",
+          "scope": "resource",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cppTestExplorer.buildBase": {
+          "type": "string",
+          "default": "build",
+          "description": "Colcon build base containing one build directory per package.",
+          "scope": "resource"
+        },
+        "cppTestExplorer.buildDirectories": {
+          "type": "array",
+          "default": [
+            "build"
+          ],
+          "description": "Ordinary CMake build directories. Colcon package directories are also discovered automatically.",
+          "scope": "resource",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cppTestExplorer.buildConfiguration": {
+          "type": "string",
+          "default": "",
+          "description": "CTest multi-configuration build configuration, such as Debug.",
+          "scope": "resource"
+        },
+        "cppTestExplorer.ctestPath": {
+          "type": "string",
+          "default": "ctest",
+          "description": "Path to CTest (3.14 or newer).",
+          "scope": "resource"
+        },
+        "cppTestExplorer.executables": {
+          "type": "array",
+          "default": [],
+          "description": "Explicit Google Test executables. Paths are workspace-relative; package optionally associates an entry with a ROS package.",
+          "scope": "resource",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "path"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "group": {
+                "type": "string"
+              },
+              "package": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "type": "string"
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "timeout": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "cppTestExplorer.exclude": {
+          "type": "array",
+          "default": [],
+          "description": "Folder globs excluding descendant packages and their build artifacts. COLCON_IGNORE is also honored.",
+          "scope": "resource",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cppTestExplorer.setupScripts": {
+          "type": "array",
+          "default": [],
+          "description": "Bash setup files sourced in order before the workspace install/setup.bash.",
+          "scope": "resource",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cppTestExplorer.autoSourceWorkspace": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically source install/setup.bash if present.",
+          "scope": "resource"
+        },
+        "cppTestExplorer.env": {
+          "type": "object",
+          "default": {},
+          "description": "Explicit environment overrides applied after sourced and test environments.",
+          "scope": "resource",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "cppTestExplorer.concurrency": {
+          "type": "integer",
+          "default": 0,
+          "description": "Maximum concurrent processes across requests. 0 selects min(4, available CPUs). In multi-root workspaces the smallest resolved limit applies.",
+          "scope": "resource",
+          "minimum": 0
+        },
+        "cppTestExplorer.parallelMode": {
+          "type": "string",
+          "default": "executable",
+          "description": "Parallelize executables, or run each selected case in a separate process.",
+          "scope": "resource",
+          "enum": [
+            "executable",
+            "case"
+          ]
+        },
+        "cppTestExplorer.discoveryTimeout": {
+          "type": "number",
+          "default": 30,
+          "description": "Discovery and setup timeout in seconds.",
+          "scope": "resource",
+          "exclusiveMinimum": 0
+        },
+        "cppTestExplorer.timeout": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "description": "Execution timeout in seconds. null uses CTest metadata or 60 seconds; 0 disables the timeout.",
+          "scope": "resource",
+          "minimum": 0
+        },
+        "cppTestExplorer.runDisabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run disabled Google Test cases and disabled registrations.",
+          "scope": "resource"
+        },
+        "cppTestExplorer.debug": {
+          "type": "object",
+          "default": {
+            "lldb": {},
+            "cppdbg": {}
+          },
+          "description": "Adapter-specific launch overrides. Program, arguments, working directory, environment, session identity, and preLaunchTask cannot be overridden.",
+          "scope": "resource",
+          "additionalProperties": false,
+          "properties": {
+            "lldb": {
+              "type": "object"
+            },
+            "cppdbg": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.3.0",
+    "minimatch": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.96.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0"
+  },
+  "author": {
+    "name": "Namo Robotics"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/namo-robotics/test_explorer_cpp"
+  },
+  "homepage": "https://github.com/namo-robotics/test_explorer_cpp#readme",
+  "bugs": {
+    "url": "https://github.com/namo-robotics/test_explorer_cpp/issues"
+  },
+  "icon": "assets/icon.png"
+}
