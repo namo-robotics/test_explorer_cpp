@@ -1,6 +1,6 @@
 {
   "cppTestExplorer.sourceRoots": ["test/fixtures/ros2/src"],
-  "cppTestExplorer.buildDirectories": ["build/explorer_fixture"],
+  "cppTestExplorer.buildDirectories": ["build/explorer_fixture", "build/scalability"],
   "cppTestExplorer.exclude": ["test/fixtures/ros2/src/vendor"],
   "cppTestExplorer.parallelMode": "case"
 }

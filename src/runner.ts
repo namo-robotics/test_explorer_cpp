@@ -98,36 +98,63 @@ export async function runExecutable(
     }
     return true;
   });
-  const jobs = batches(runnable, settings.parallelMode, scheduler.concurrency).map(
-    async (batch) => {
-      try {
-        await scheduler.schedule(async () => {
-          await runBatch(executable, batch, settings, events, signal);
-        }, signal);
-      } catch (e) {
-        batch.forEach((test) =>
-          events.result({
-            name: test.name,
-            state: signal.aborted ? 'skipped' : 'errored',
-            message: String(e),
-          }),
-        );
-      }
-    },
-  );
-  await Promise.all(jobs);
+  if (!runnable.length) return;
+  let directory: string;
+  try {
+    directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cpp-test-explorer-'));
+  } catch (error) {
+    runnable.forEach((test) =>
+      events.result({
+        name: test.name,
+        state: signal.aborted ? 'skipped' : 'errored',
+        message: String(error),
+      }),
+    );
+    return;
+  }
+  const environment = testEnvironment(executable.env);
+  try {
+    const jobs = batches(runnable, settings.parallelMode, scheduler.concurrency).map(
+      async (batch, index) => {
+        try {
+          await scheduler.schedule(async () => {
+            await runBatch(
+              executable,
+              batch,
+              settings,
+              events,
+              signal,
+              path.join(directory, `${index}.xml`),
+              environment,
+            );
+          }, signal);
+        } catch (error) {
+          batch.forEach((test) =>
+            events.result({
+              name: test.name,
+              state: signal.aborted ? 'skipped' : 'errored',
+              message: String(error),
+            }),
+          );
+        }
+      },
+    );
+    await Promise.all(jobs);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
 }
 
-/** Execute one batch and remove its temporary result files when finished. */
+/** Execute one batch using its own result file in the request directory. */
 async function runBatch(
   executable: Executable,
   batch: TestCase[],
   settings: Settings,
   events: RunEvents,
   signal: AbortSignal,
+  file: string,
+  environment: Executable['env'],
 ): Promise<void> {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cpp-test-explorer-'));
-  const file = path.join(directory, 'results.xml');
   const router = new OutputRouter(events.output);
   try {
     batch.forEach(events.started);
@@ -144,9 +171,11 @@ async function runBatch(
       ),
       {
         cwd: executable.cwd,
-        env: testEnvironment(executable.env),
+        env: environment,
         signal,
         timeout: executable.timeout,
+        // Output is streamed to the editor; outcomes come from the XML file.
+        maxOutput: 0,
         onOutput: (text, stream) => router.write(text, stream),
       },
     );
@@ -168,7 +197,6 @@ async function runBatch(
     }
   } finally {
     router.end();
-    await fs.rm(directory, { recursive: true, force: true });
   }
 }
 

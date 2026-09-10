@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { minimatch } from 'minimatch';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { applyEnvironment, resolvePath, workspaceEnvironment } from './environment';
-import { cleanArgs, matchesFilter, parseList, testEnvironment } from './gtest';
+import { cleanArgs, registeredCases, parseList, testEnvironment } from './gtest';
 import { runProcess, Scheduler } from './process';
 import type { Discovery, Environment, Executable, ManualExecutable, Settings } from './types';
 
@@ -501,10 +501,11 @@ class DiscoverySession {
       }
       const previous = unique.get(candidate.id);
       if (previous) {
-        previous.registrations =
-          previous.registrations && candidate.registrations
-            ? [...previous.registrations, ...candidate.registrations]
-            : undefined;
+        if (previous.registrations && candidate.registrations) {
+          previous.registrations.push(...candidate.registrations);
+        } else {
+          previous.registrations = undefined;
+        }
       } else {
         unique.set(candidate.id, candidate);
       }
@@ -562,12 +563,7 @@ class DiscoverySession {
       }
       const registrations = candidate.registrations;
       if (registrations) {
-        candidate.cases = candidate.cases.flatMap((test) => {
-          const matching = registrations.filter((r) => matchesFilter(test.name, r.filter));
-          return matching.length
-            ? [{ ...test, disabled: test.disabled || matching.every((r) => r.disabled) }]
-            : [];
-        });
+        candidate.cases = registeredCases(candidate.cases, registrations);
       }
       if (!candidate.cases.length) {
         return undefined;

@@ -14,6 +14,14 @@ Select a case to debug with **CodeLLDB** (`vadimcn.vscode-lldb`) or **C++ / GDB*
 
 Runs reuse the last completed discovery when workspace settings are unchanged, and automatic refreshes wait until active runs finish. Use **C++ Test Explorer: Refresh Tests** after building if needed. Binaries, discovered metadata, package manifests and setup scripts are watched automatically. **C++ Test Explorer: Show Discovery Output** explains discovery problems. Test stdout/stderr appear in Testing output; debugger output uses its Debug Console or terminal. Test cases with source metadata support **Go to Test** navigation and native source gutter actions. Locations come from the built binary, so rebuild and refresh after moving a test definition. Navigation is unavailable when the binary omits source metadata or the reported file cannot be found locally.
 
+## Run or debug from the editor
+
+Click the run icon beside a test's line number to run it, or right-click the icon for run and debug actions. In this gutter menu, **Run All Tests** and **Debug All Tests** refer to the test entries registered at that line. For a single registered case, the action targets that case.
+
+If multiple extensions discover the same test, the gutter menu contains a submenu for each provider's test entry. For example, **TestMate C++ → …** and **robot_math → …** can represent the same Google Test case discovered by TestMate and C++ Test Explorer. **Run All Tests** can then run the case through both providers. Open the desired test entry's submenu to run or debug it through that provider, or disable the other test extension for this workspace to remove duplicate entries.
+
+Parameterized or typed tests can also have several cases registered at one source line. Choose an individual case's submenu to target it; C++ Test Explorer supports debugging one case at a time.
+
 ## ROS 2
 
 Defaults are source packages below `src`, colcon builds in `build/<package>`, and automatic sourcing of `install/setup.bash` when present. Standard `ament_add_gtest` registrations supply executable arguments, working directory, timeout and environment.

@@ -1,6 +1,6 @@
 /** Interpret Google Test listings, filters, output and result files. */
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
-import type { CaseResult, TestCase } from './types';
+import type { CaseResult, Executable, TestCase } from './types';
 
 /** Read suite and case names from Google Test listing output. */
 export function parseList(output: string): TestCase[] {
@@ -82,10 +82,14 @@ export function testEnvironment(env: Record<string, string>): Record<string, str
 }
 /** Match a Google Test name against positive and negative wildcard filters. */
 export function matchesFilter(name: string, filter: string): boolean {
+  return compileFilter(filter)(name);
+}
+/** Compile wildcard alternatives once for matching many discovered cases. */
+function compileFilter(filter: string): (name: string) => boolean {
   const separator = filter.indexOf('-');
   const positive = separator < 0 ? filter : filter.slice(0, separator);
   const negative = separator < 0 ? '' : filter.slice(separator + 1);
-  const matches = (pattern: string) =>
+  const compile = (pattern: string) =>
     new RegExp(
       '^' +
         pattern
@@ -93,10 +97,42 @@ export function matchesFilter(name: string, filter: string): boolean {
           .replace(/\*/g, '.*')
           .replace(/\?/g, '.') +
         '$',
-    ).test(name);
-  return (
-    (positive || '*').split(':').some(matches) && !negative.split(':').filter(Boolean).some(matches)
-  );
+    );
+  const included = (positive || '*').split(':').map(compile);
+  const excluded = negative.split(':').filter(Boolean).map(compile);
+  return (name) =>
+    included.some((pattern) => pattern.test(name)) &&
+    !excluded.some((pattern) => pattern.test(name));
+}
+/** Select registered cases using an index for exact names and preserve disabled overrides. */
+export function registeredCases(
+  cases: TestCase[],
+  registrations: NonNullable<Executable['registrations']>,
+): TestCase[] {
+  const exact = new Map<string, boolean>();
+  const patterns: { matches: (name: string) => boolean; disabled: boolean }[] = [];
+  for (const registration of registrations) {
+    if (!registration.filter || /[*?\-]/.test(registration.filter)) {
+      patterns.push({
+        matches: compileFilter(registration.filter),
+        disabled: registration.disabled,
+      });
+      continue;
+    }
+    for (const name of registration.filter.split(':')) {
+      exact.set(name, (exact.get(name) ?? true) && registration.disabled);
+    }
+  }
+  return cases.flatMap((test) => {
+    let disabled = exact.get(test.name);
+    for (const registration of patterns) {
+      if (disabled === false) break;
+      if (registration.matches(test.name)) {
+        disabled = (disabled ?? true) && registration.disabled;
+      }
+    }
+    return disabled === undefined ? [] : [{ ...test, disabled: test.disabled || disabled }];
+  });
 }
 const array = (value: any): any[] =>
   value === undefined ? [] : Array.isArray(value) ? value : [value];
@@ -158,25 +194,46 @@ export class OutputRouter {
       return;
     }
     this.pending += text;
-    let end: number;
-    while ((end = this.pending.indexOf('\n')) >= 0) {
-      this.line(this.pending.slice(0, end + 1));
-      this.pending = this.pending.slice(end + 1);
+    const lines: string[] = [];
+    let owner: string | undefined;
+    const flush = () => {
+      if (lines.length) this.emit(lines.join(''), owner);
+      lines.length = 0;
+    };
+    const collect = (line: string, name?: string) => {
+      if (name !== owner) flush();
+      owner = name;
+      lines.push(line);
+    };
+    const complete = this.pending.lastIndexOf('\n') + 1;
+    let offset = 0;
+    while (offset < complete) {
+      // Only lines beginning with a bracket can change the output owner.
+      const marker = this.pending.indexOf('\n[', offset);
+      const end = marker < 0 || marker >= complete ? complete : marker + 1;
+      this.line(this.pending.slice(offset, end), collect);
+      offset = end;
     }
+    this.pending = this.pending.slice(complete);
+    flush();
     // Bound buffering when a test emits an extremely long line.
     if (this.pending.length > 16384) {
       this.emit(this.pending, this.current);
       this.pending = '';
     }
   }
-  private line(line: string) {
+  private line(line: string, emit: (text: string, name?: string) => void) {
     const start = /^\[ RUN\s+\] (\S+)/.exec(line);
     if (start) {
       this.current = start[1];
     }
-    this.emit(line, this.current);
     if (/^\[\s*(OK|FAILED|SKIPPED)\s*\]/.test(line)) {
+      const end = line.indexOf('\n') + 1;
+      emit(line.slice(0, end), this.current);
       this.current = undefined;
+      if (end < line.length) emit(line.slice(end));
+    } else {
+      emit(line, this.current);
     }
   }
   /** Flush any remaining partial line. */

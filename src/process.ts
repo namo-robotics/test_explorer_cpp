@@ -10,6 +10,7 @@ export interface ProcessOptions {
   signal?: AbortSignal;
   timeout?: number;
   onOutput?: (text: string, stream: 'stdout' | 'stderr') => void;
+  /** Maximum captured characters per stream; zero streams output without retaining it. */
   maxOutput?: number;
 }
 /** Captured output and termination details from an owned child process. */
@@ -21,6 +22,52 @@ export interface ProcessResult {
   cancelled: boolean;
   timedOut: boolean;
   truncated: boolean;
+}
+/** Retain an output tail without copying previously captured text on every chunk. */
+class OutputTail {
+  private chunks: string[] = [];
+  private head = 0;
+  private length = 0;
+  /** Whether output has exceeded the capture limit. */
+  truncated = false;
+
+  /** Set the maximum number of retained characters. */
+  constructor(private readonly limit: number) {}
+
+  /** Append decoded text and release chunks outside the retained tail. */
+  append(text: string): void {
+    if (!text) return;
+    this.truncated ||= this.length + text.length > this.limit;
+    if (this.limit === 0) return;
+    if (text.length >= this.limit) {
+      this.chunks = [text.slice(-this.limit)];
+      this.head = 0;
+      this.length = this.limit;
+      return;
+    }
+    this.chunks.push(text);
+    this.length += text.length;
+    while (this.length > this.limit) {
+      const first = this.chunks[this.head];
+      const excess = this.length - this.limit;
+      if (first.length <= excess) {
+        this.length -= first.length;
+        this.chunks[this.head++] = '';
+      } else {
+        this.chunks[this.head] = first.slice(excess);
+        this.length -= excess;
+      }
+    }
+    if (this.head > this.chunks.length / 2) {
+      this.chunks = this.chunks.slice(this.head);
+      this.head = 0;
+    }
+  }
+
+  /** Join the retained chunks when the process finishes. */
+  text(): string {
+    return this.chunks.slice(this.head).join('');
+  }
 }
 /** Run a program without a shell and terminate its process group when cancelled. */
 export function runProcess(
@@ -38,11 +85,10 @@ export function runProcess(
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    let stdout = '';
-    let stderr = '';
+    const limit = options.maxOutput ?? 8 * 1024 * 1024;
+    const capture = { stdout: new OutputTail(limit), stderr: new OutputTail(limit) };
     let cancelled = false;
     let timedOut = false;
-    let truncated = false;
     let escalation: NodeJS.Timeout | undefined;
     const kill = (signal: NodeJS.Signals) => {
       if (child.pid) {
@@ -75,17 +121,10 @@ export function runProcess(
           stop();
         }, options.timeout * 1000)
       : undefined;
-    const limit = options.maxOutput ?? 8 * 1024 * 1024;
     const decoders = { stdout: new StringDecoder('utf8'), stderr: new StringDecoder('utf8') };
     const output = (text: string, stream: 'stdout' | 'stderr') => {
       options.onOutput?.(text, stream);
-      if (stream === 'stdout') {
-        truncated ||= stdout.length + text.length > limit;
-        stdout = (stdout + text).slice(-limit);
-      } else {
-        truncated ||= stderr.length + text.length > limit;
-        stderr = (stderr + text).slice(-limit);
-      }
+      capture[stream].append(text);
     };
     child.stdout.on('data', (data) => output(decoders.stdout.write(data), 'stdout'));
     child.stderr.on('data', (data) => output(decoders.stderr.write(data), 'stderr'));
@@ -106,7 +145,15 @@ export function runProcess(
       output(decoders.stdout.end(), 'stdout');
       output(decoders.stderr.end(), 'stderr');
       cleanup();
-      resolve({ stdout, stderr, code, signal, cancelled, timedOut, truncated });
+      resolve({
+        stdout: capture.stdout.text(),
+        stderr: capture.stderr.text(),
+        code,
+        signal,
+        cancelled,
+        timedOut,
+        truncated: capture.stdout.truncated || capture.stderr.truncated,
+      });
     });
     if (options.signal?.aborted) {
       abort();

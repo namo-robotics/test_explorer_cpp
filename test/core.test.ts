@@ -3,7 +3,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyEnvironment } from '../src/environment';
 import { fromCTest, excluded } from '../src/discovery';
-import { parseList, parseResults, testArgs, testEnvironment, OutputRouter } from '../src/gtest';
+import {
+  registeredCases,
+  matchesFilter,
+  parseList,
+  parseResults,
+  testArgs,
+  testEnvironment,
+  OutputRouter,
+} from '../src/gtest';
 import { debugConfiguration } from '../src/debug';
 import { Scheduler } from '../src/process';
 import { selectLeaves } from '../src/selection';
@@ -269,4 +277,110 @@ test('batch mode retains the command-length limit', () => {
     [1, 1, 1],
   );
   assert.deepEqual(grouped.flat(), cases);
+});
+
+test('registration indexing preserves overlapping filters and disabled cases', () => {
+  const cases = parseList('Suite.\n  One\n  Two\n  Three\n  DISABLED_Four\nOther.\n  Five\n');
+  for (const registrations of [
+    [],
+    [
+      { filter: 'Suite.One:Suite.Two', disabled: true },
+      { filter: 'Suite.One', disabled: false },
+    ],
+    [
+      { filter: 'Suite.*-Suite.Three', disabled: true },
+      { filter: 'Suite.Two', disabled: false },
+    ],
+    [{ filter: '', disabled: false }],
+    [{ filter: '-Suite.Three', disabled: false }],
+    [{ filter: 'Suite.?ne', disabled: false }],
+    [{ filter: 'Suite.DISABLED_Four', disabled: false }],
+    [
+      { filter: 'Other.Five', disabled: true },
+      { filter: '*', disabled: false },
+    ],
+  ]) {
+    const expected = cases.flatMap((test) => {
+      const matches = registrations.filter((r) => matchesFilter(test.name, r.filter));
+      return matches.length
+        ? [{ ...test, disabled: test.disabled || matches.every((r) => r.disabled) }]
+        : [];
+    });
+    assert.deepEqual(registeredCases(cases, registrations), expected);
+  }
+});
+
+test('output routing combines adjacent lines without mixing test ownership', () => {
+  const output: [string, string | undefined][] = [];
+  const router = new OutputRouter((text, name) => output.push([text, name]));
+  const first =
+    '[ RUN      ] Suite.One\n' + 'detail\n'.repeat(1000) + '[       OK ] Suite.One (0 ms)\n';
+  const second = '[ RUN      ] Suite.Two\nhello\n[       OK ] Suite.Two (0 ms)\n';
+  router.write('setup\n' + first + 'between\n' + second + 'teardown\n', 'stdout');
+  router.end();
+  assert.deepEqual(output, [
+    ['setup\n', undefined],
+    [first, 'Suite.One'],
+    ['between\n', undefined],
+    [second, 'Suite.Two'],
+    ['teardown\n', undefined],
+  ]);
+});
+
+test('wildcard registrations select a large listing with exclusions and disabled overrides', () => {
+  const cases = Array.from({ length: 1000 }, (_, i) => ({
+    name: `Suite${i}.Test`,
+    suite: `Suite${i}`,
+    label: 'Test',
+    disabled: i === 5,
+  }));
+  const registrations = cases.map((test, i) => ({
+    filter: `${test.suite}.*-Suite7.*`,
+    disabled: i % 2 === 0,
+  }));
+  registrations.push({ filter: 'Suite?.Test-Suite7.*', disabled: false });
+  const selected = registeredCases(cases, registrations);
+  assert.deepEqual(
+    selected,
+    cases
+      .filter((_, i) => i !== 7)
+      .map((test) => {
+        const i = Number(test.suite.slice('Suite'.length));
+        return { ...test, disabled: i === 5 || (i >= 10 && i % 2 === 0) };
+      }),
+  );
+});
+
+test('wildcard matching treats regex punctuation as literal text', () => {
+  assert(matchesFilter('Suite[0].Test+value', 'Suite[0].Test+*'));
+  assert(!matchesFilter('Suite0.Testvalue', 'Suite[0].Test+*'));
+  assert(matchesFilter('Other.Test', 'Suite.*:Other.?est-Suite.Skip'));
+  assert(!matchesFilter('Suite.Skip', 'Suite.*:Other.?est-Suite.Skip'));
+});
+
+test('output block scanning preserves owners across fragmented completion markers', () => {
+  const expected: [string, string | undefined][] = [
+    ['setup\n', undefined],
+    [
+      '[ RUN      ] Suite.One\ndetail [bracket]\nmore\n[  FAILED  ] Suite.One (0 ms)\n',
+      'Suite.One',
+    ],
+    ['between\nplain output\n', undefined],
+    ['[ RUN      ] Suite.Two\n[custom log]\nmore\n[  SKIPPED ] Suite.Two (0 ms)\n', 'Suite.Two'],
+    ['teardown\npartial', undefined],
+  ];
+  const text = expected.map(([text]) => text).join('');
+  for (const size of [1, 7, text.length]) {
+    const output: typeof expected = [];
+    const router = new OutputRouter((text, name) => {
+      const previous = output.at(-1);
+      if (previous && previous[1] === name) previous[0] += text;
+      else output.push([text, name]);
+    });
+    for (let offset = 0; offset < text.length; offset += size) {
+      router.write(text.slice(offset, offset + size), 'stdout');
+    }
+    router.end();
+    assert.deepEqual(output, expected);
+  }
 });

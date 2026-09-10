@@ -416,3 +416,41 @@ test('cancelling a batch stops its process and skips batches still in the queue'
   assert.equal(new Set(results.map((result) => result.name)).size, selected.length);
   assert.equal(results.find((result) => result.name === 'Basic.Pass')?.state, 'skipped');
 });
+
+test('concurrent case runs share setup within a request and isolate result files', async (t) => {
+  const directories = t.mock.method(fs, 'mkdtemp');
+  const cleanup = t.mock.method(fs, 'rm');
+  const cases = executable.cases.filter((test) => test.suite === 'Basic' && !test.disabled);
+  const scheduler = new Scheduler(4);
+  await Promise.all(
+    Array.from({ length: 2 }, async () => {
+      const results: CaseResult[] = [];
+      await runExecutable(
+        executable,
+        cases,
+        settings({ parallelMode: 'case' }),
+        scheduler,
+        {
+          started: () => {},
+          output: () => {},
+          result: (result) => results.push(result),
+        },
+        new AbortController().signal,
+      );
+      assert.deepEqual(Object.fromEntries(results.map((result) => [result.name, result.state])), {
+        'Basic.Pass': 'passed',
+        'Basic.Fail': 'failed',
+        'Basic.Skip': 'skipped',
+      });
+      assert.equal(results.length, cases.length);
+    }),
+  );
+  assert.equal(directories.mock.callCount(), 2, 'Create one directory per request');
+  const paths = await Promise.all(directories.mock.calls.map((call) => call.result));
+  assert.equal(new Set(paths).size, 2, 'Concurrent requests use different directories');
+  assert.equal(cleanup.mock.callCount(), 2);
+  for (const directory of paths) {
+    assert(typeof directory === 'string');
+    await assert.rejects(fs.stat(directory), { code: 'ENOENT' });
+  }
+});
