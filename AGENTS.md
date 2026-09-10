@@ -5,6 +5,8 @@ A file for guiding coding agents.
 ## Commands
 
 - Never use git commands except for readonly ones like `git status` and `git diff`.
+- `npm run format` for formatting
+- `npm run test` for testing
 
 ## Code Comments
 

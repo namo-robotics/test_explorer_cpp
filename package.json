@@ -37,7 +37,9 @@
     "test:extension": "tsc && node out/test/host/run.js",
     "vscode:prepublish": "npm run compile",
     "package": "vsce package",
-    "test:ros": "tsc && node out/test/ros/colcon.js"
+    "test:ros": "tsc && node out/test/ros/colcon.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "contributes": {
     "commands": [
@@ -246,6 +248,7 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.6.0",
     "esbuild": "^0.25.0",
+    "prettier": "3.9.6",
     "typescript": "^5.9.0"
   },
   "author": {

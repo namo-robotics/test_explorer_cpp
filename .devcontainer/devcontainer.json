@@ -21,7 +21,12 @@
   "postCreateCommand": "npm ci && npm run compile",
   "customizations": {
     "vscode": {
-      "extensions": ["ms-vscode.cpptools", "vadimcn.vscode-lldb", "anthropic.claude-code", "openai.chatgpt"],
+      "extensions": [
+        "ms-vscode.cpptools",
+        "vadimcn.vscode-lldb",
+        "anthropic.claude-code",
+        "openai.chatgpt"
+      ],
       "settings": { "terminal.integrated.defaultProfile.linux": "bash" }
     }
   }

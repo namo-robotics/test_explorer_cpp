@@ -18,3 +18,5 @@ package-lock.json
 build/**
 install/**
 log/**
+.prettierrc.json
+.prettierignore

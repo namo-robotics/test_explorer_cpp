@@ -32,7 +32,12 @@ export interface Settings {
   debug: { lldb: Record<string, unknown>; cppdbg: Record<string, unknown> };
 }
 /** A discovered Google Test case with its original filter name. */
-export interface TestCase { name: string; suite: string; label: string; disabled: boolean }
+export interface TestCase {
+  name: string;
+  suite: string;
+  label: string;
+  disabled: boolean;
+}
 /** A test program together with its execution environment and cases. */
 export interface Executable {
   id: string;

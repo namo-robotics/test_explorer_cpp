@@ -50,7 +50,7 @@ CMake discovery uses `ctest --show-only=json-v1` (CTest 3.14+). `gtest_discover_
       "group": "Standalone",
       "args": ["--application-test-mode"],
       "cwd": ".",
-      "env": {"TEST_DATA": "/tmp/test-data"},
+      "env": { "TEST_DATA": "/tmp/test-data" },
       "timeout": 120
     }
   ]
@@ -61,17 +61,17 @@ Set both `buildDirectories` and `sourceRoots` to `[]` for manual-only discovery.
 
 ## Execution settings
 
-| Setting (`cppTestExplorer.` prefix) | Default | Behavior |
-| --- | --- | --- |
-| `concurrency` | `0` | Auto: up to 4 available CPUs. Positive values set a shared process limit. The smallest resolved limit applies in multi-root workspaces. |
-| `parallelMode` | `"case"` | One process per case; `"executable"` parallelizes binaries. |
-| `discoveryTimeout` | `30` | Seconds for discovery and sourcing setup files. |
-| `timeout` | `null` | Registered timeout or 60 seconds. `0` disables it. Explicit executable timeout takes precedence. |
-| `runDisabled` | `false` | Show disabled cases but skip ordinary runs; enable to run them. Explicit debugging enables disabled tests. |
-| `autoSourceWorkspace` | `true` | Source `install/setup.bash` after configured `setupScripts`. |
-| `env` | `{}` | Workspace environment overrides. |
-| `ctestPath` | `"ctest"` | CTest executable. |
-| `debug` | `{"lldb":{},"cppdbg":{}}` | Adapter overrides, e.g. `miDebuggerPath`, `sourceFileMap`, `sourceMap` or `terminal`. |
+| Setting (`cppTestExplorer.` prefix) | Default                   | Behavior                                                                                                                                |
+| ----------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `concurrency`                       | `0`                       | Auto: up to 4 available CPUs. Positive values set a shared process limit. The smallest resolved limit applies in multi-root workspaces. |
+| `parallelMode`                      | `"case"`                  | One process per case; `"executable"` parallelizes binaries.                                                                             |
+| `discoveryTimeout`                  | `30`                      | Seconds for discovery and sourcing setup files.                                                                                         |
+| `timeout`                           | `null`                    | Registered timeout or 60 seconds. `0` disables it. Explicit executable timeout takes precedence.                                        |
+| `runDisabled`                       | `false`                   | Show disabled cases but skip ordinary runs; enable to run them. Explicit debugging enables disabled tests.                              |
+| `autoSourceWorkspace`               | `true`                    | Source `install/setup.bash` after configured `setupScripts`.                                                                            |
+| `env`                               | `{}`                      | Workspace environment overrides.                                                                                                        |
+| `ctestPath`                         | `"ctest"`                 | CTest executable.                                                                                                                       |
+| `debug`                             | `{"lldb":{},"cppdbg":{}}` | Adapter overrides, e.g. `miDebuggerPath`, `sourceFileMap`, `sourceMap` or `terminal`.                                                   |
 
 Environment order: extension host → ordered setup scripts → workspace setup → CTest/ament environment → workspace `env` → explicit executable `env`. Discovery, running and debugging use this environment. The extension manages selection, sharding and output-related Google Test flags. Debug overrides cannot replace the selected target, filter, working directory, environment or run build tasks.
 
@@ -83,13 +83,13 @@ Choose **Dev Containers: Reopen in Container**. The image uses **ROS 2 Lyrical**
 
 The absolute project path is preserved inside the container to retain project history associations. The following host paths are bind-mounted into the corresponding locations under `/home/ubuntu`:
 
-| Host path | Access / purpose |
-| --- | --- |
-| `~/.ssh` | Read-only SSH keys and known hosts |
-| `~/.config/gh` | Read/write GitHub CLI configuration |
-| `~/.claude` | Read/write Claude settings and session history |
-| `~/.claude.json` | Read/write Claude sign-in and project state |
-| `~/.codex` | Read/write Codex configuration, file credentials and session state |
+| Host path        | Access / purpose                                                   |
+| ---------------- | ------------------------------------------------------------------ |
+| `~/.ssh`         | Read-only SSH keys and known hosts                                 |
+| `~/.config/gh`   | Read/write GitHub CLI configuration                                |
+| `~/.claude`      | Read/write Claude settings and session history                     |
+| `~/.claude.json` | Read/write Claude sign-in and project state                        |
+| `~/.codex`       | Read/write Codex configuration, file credentials and session state |
 
 Data stays on the host across container rebuilds. File-backed authentication is shared; credentials held only in the host OS keyring may still require container sign-in. Custom `CODEX_HOME`/`CLAUDE_CONFIG_DIR` locations or absolute host-home paths in tool configurations require corresponding adjustments. See [Codex state locations](https://learn.chatgpt.com/docs/config-file/config-advanced#config-and-state-locations) and [Claude configuration locations](https://code.claude.com/docs/en/settings).
 
@@ -127,3 +127,7 @@ code .
 ```
 
 Set `"cppTestExplorer.exclude": ["src/vendor"]` to hide the built sensor package. The two packages below `hidden/COLCON_IGNORE` intentionally fail configuration if colcon tries to build them.
+
+## Code formatting
+
+Run `npm run format` to format supported source, test, configuration, and documentation files with Prettier. Run `npm run format:check` to check formatting without changing files; CI runs this check too. Generated output and build directories are excluded in `.prettierignore`.

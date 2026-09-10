@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+.vscode-test/
+*.vsix
+build/
+install/
+log/
+package-lock.json
+.agents/
+.codex/
