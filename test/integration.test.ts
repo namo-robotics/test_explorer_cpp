@@ -74,18 +74,21 @@ test('real discovery locates ordinary, disabled, typed and parameterized definit
     );
   }
 });
-for (const mode of ['executable', 'case'] as const)
+for (const mode of ['executable', 'case', 'batch'] as const)
   test(`real runs report pass/fail/skip, output and disabled cases in ${mode} mode`, async () => {
     const results: CaseResult[] = [],
       output: string[] = [];
     await runExecutable(
       executable,
       executable.cases.filter((c) => c.suite === 'Basic'),
-      settings({ parallelMode: mode }),
+      settings({ parallelMode: mode, batchSize: 2 }),
       new Scheduler(2),
       { started: () => {}, result: (r) => results.push(r), output: (text) => output.push(text) },
       new AbortController().signal,
     );
+    assert.equal(results.length, 4, 'Every selected case receives exactly one result');
+    const launches = output.filter((text) => text.startsWith(`Running ${executable.path} (`));
+    assert.equal(launches.length, mode === 'case' ? 3 : mode === 'batch' ? 2 : 1);
     const states = Object.fromEntries(results.map((r) => [r.name, r.state]));
     assert.deepEqual(states, {
       'Basic.DISABLED_Optional': 'skipped',
@@ -345,4 +348,57 @@ test('builds without CTest metadata are silent and become discoverable after tes
     configured.executables[0].cases.map((test) => test.name),
     ['Basic.Pass'],
   );
+});
+
+test('successful empty listings are skipped silently while failed listings still report errors', async () => {
+  for (const script of ['', 'console.log("No tests registered")', 'process.exit(1)']) {
+    const discovery = await discover(
+      root,
+      settings({
+        sourceRoots: [],
+        buildDirectories: [],
+        executables: [{ id: 'empty-listing', path: process.execPath, args: ['-e', script, '--'] }],
+      }),
+      new Scheduler(1),
+    );
+    assert.deepEqual(discovery.executables, []);
+    assert(discovery.watchPaths.includes(process.execPath));
+    if (script === 'process.exit(1)') {
+      assert.equal(discovery.diagnostics.length, 1);
+      assert.match(discovery.diagnostics[0], /Google Test listing failed/);
+    } else {
+      assert.deepEqual(discovery.diagnostics, []);
+    }
+  }
+});
+
+test('cancelling a batch stops its process and skips batches still in the queue', async () => {
+  const selected = ['Process.Slow', 'Basic.Pass', 'Basic.Fail'].map((name) =>
+    executable.cases.find((testCase) => testCase.name === name)!,
+  );
+  const abort = new AbortController();
+  const results: CaseResult[] = [];
+  const started: string[] = [];
+  let launches = 0;
+  await runExecutable(
+    executable,
+    selected,
+    settings({ parallelMode: 'batch', batchSize: 2 }),
+    new Scheduler(1),
+    {
+      started: (testCase) => started.push(testCase.name),
+      result: (result) => results.push(result),
+      output: (text) => {
+        if (text.startsWith(`Running ${executable.path} (`)) launches++;
+        if (/\[ RUN\s+\] Process.Slow/.test(text)) abort.abort();
+      },
+    },
+    abort.signal,
+  );
+  assert(abort.signal.aborted, 'Cancel while a test in the first batch is running');
+  assert.equal(launches, 1);
+  assert.deepEqual(started, ['Process.Slow', 'Basic.Pass']);
+  assert.equal(results.length, selected.length);
+  assert.equal(new Set(results.map((result) => result.name)).size, selected.length);
+  assert.equal(results.find((result) => result.name === 'Basic.Fail')?.state, 'skipped');
 });

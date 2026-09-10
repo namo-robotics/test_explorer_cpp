@@ -15,6 +15,7 @@ export function settings(overrides: Partial<Settings> = {}): Settings {
     env: {},
     concurrency: 2,
     parallelMode: 'case',
+    batchSize: 25,
     discoveryTimeout: 30,
     timeout: null,
     runDisabled: false,

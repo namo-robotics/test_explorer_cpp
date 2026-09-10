@@ -61,17 +61,18 @@ Set both `buildDirectories` and `sourceRoots` to `[]` for manual-only discovery.
 
 ## Execution settings
 
-| Setting (`cppTestExplorer.` prefix) | Default                   | Behavior                                                                                                                                |
-| ----------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `concurrency`                       | `0`                       | Auto: up to 4 available CPUs. Positive values set a shared process limit. The smallest resolved limit applies in multi-root workspaces. |
-| `parallelMode`                      | `"case"`                  | One process per case; `"executable"` parallelizes binaries.                                                                             |
-| `discoveryTimeout`                  | `30`                      | Seconds for discovery and sourcing setup files.                                                                                         |
-| `timeout`                           | `null`                    | Registered timeout or 60 seconds. `0` disables it. Explicit executable timeout takes precedence.                                        |
-| `runDisabled`                       | `false`                   | Show disabled cases but skip ordinary runs; enable to run them. Explicit debugging enables disabled tests.                              |
-| `autoSourceWorkspace`               | `true`                    | Source `install/setup.bash` after configured `setupScripts`.                                                                            |
-| `env`                               | `{}`                      | Workspace environment overrides.                                                                                                        |
-| `ctestPath`                         | `"ctest"`                 | CTest executable.                                                                                                                       |
-| `debug`                             | `{"lldb":{},"cppdbg":{}}` | Adapter overrides, e.g. `miDebuggerPath`, `sourceFileMap`, `sourceMap` or `terminal`.                                                   |
+| Setting (`cppTestExplorer.` prefix) | Default                   | Behavior                                                                                                                                       |
+| ----------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `concurrency`                       | `0`                       | Auto: number of available CPU cores. Positive values set a shared process limit. The smallest resolved limit applies in multi-root workspaces. |
+| `parallelMode`                      | `"case"`                  | One process per case; `"executable"` parallelizes binaries; `"batch"` groups cases into processes.                                             |
+| `batchSize`                         | `25`                      | Maximum cases per process in `"batch"` mode. Must be a positive integer.                                                                       |
+| `discoveryTimeout`                  | `30`                      | Seconds for discovery and sourcing setup files.                                                                                                |
+| `timeout`                           | `null`                    | Registered timeout or 60 seconds. `0` disables it. Explicit executable timeout takes precedence.                                               |
+| `runDisabled`                       | `false`                   | Show disabled cases but skip ordinary runs; enable to run them. Explicit debugging enables disabled tests.                                     |
+| `autoSourceWorkspace`               | `true`                    | Source `install/setup.bash` after configured `setupScripts`.                                                                                   |
+| `env`                               | `{}`                      | Workspace environment overrides.                                                                                                               |
+| `ctestPath`                         | `"ctest"`                 | CTest executable.                                                                                                                              |
+| `debug`                             | `{"lldb":{},"cppdbg":{}}` | Adapter overrides, e.g. `miDebuggerPath`, `sourceFileMap`, `sourceMap` or `terminal`.                                                          |
 
 Environment order: extension host → ordered setup scripts → workspace setup → CTest/ament environment → workspace `env` → explicit executable `env`. Discovery, running and debugging use this environment. The extension manages selection, sharding and output-related Google Test flags. Debug overrides cannot replace the selected target, filter, working directory, environment or run build tasks.
 
@@ -116,7 +117,7 @@ source /opt/ros/lyrical/setup.bash
 npm run test:ros
 ```
 
-This copies the fixture into a temporary workspace, builds with colcon, and checks actual ament discovery, package grouping, parameterized tests, environment, working directory, both parallel modes, exclusions, and that both hidden packages were never built. Temporary builds are removed afterward. CI runs the ordinary and extension-host suites plus a ROS 2 Lyrical colcon job.
+This copies the fixture into a temporary workspace, builds with colcon, and checks actual ament discovery, package grouping, parameterized tests, environment, working directory, all parallel modes, exclusions, and that both hidden packages were never built. Temporary builds are removed afterward. CI runs the ordinary and extension-host suites plus a ROS 2 Lyrical colcon job.
 
 To explore the fixture manually:
 
@@ -131,3 +132,19 @@ Set `"cppTestExplorer.exclude": ["src/vendor"]` to hide the built sensor package
 ## Code formatting
 
 Run `npm run format` to format supported source, test, configuration, and documentation files with Prettier. Run `npm run format:check` to check formatting without changing files; CI runs this check too. Generated output and build directories are excluded in `.prettierignore`.
+
+## Batched execution
+
+For many short tests in one binary, use batch mode to share process startup across several cases:
+
+```json
+{
+  "cppTestExplorer.parallelMode": "batch",
+  "cppTestExplorer.batchSize": 25,
+  "cppTestExplorer.concurrency": 8
+}
+```
+
+A selection of 1,000 runnable cases normally produces 40 processes, with up to 8 running concurrently. Each process runs its cases sequentially; the next queued batch starts when a slot becomes free. Smaller batches balance uneven test durations, while larger batches reduce startup overhead. Very long test names can cause smaller batches to keep command lines manageable.
+
+Disabled cases are skipped unless enabled. Results and output remain associated with individual cases. The configured timeout applies to the entire batch process, so allow enough time for all its cases. Stop cancels queued batches and terminates active batch processes. Debugging still runs one selected case. The default mode remains `"case"`; `batchSize` only affects `"batch"` mode.

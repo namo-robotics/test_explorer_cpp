@@ -77,7 +77,7 @@ async function main() {
       'robot_geometry',
       'robot_math',
     ]);
-    for (const mode of ['executable', 'case'] as const) {
+    for (const mode of ['executable', 'case', 'batch'] as const) {
       const results: CaseResult[] = [];
       let output = '';
       await Promise.all(
@@ -85,7 +85,7 @@ async function main() {
           runExecutable(
             executable,
             executable.cases,
-            settings({ parallelMode: mode }),
+            settings({ parallelMode: mode, batchSize: 2 }),
             scheduler,
             {
               started: () => {},
@@ -106,7 +106,7 @@ async function main() {
       assert(output.includes('robot_math output'));
     }
     console.log(
-      'ROS 2 colcon: real ament discovery, package grouping, environment, cwd, both parallel modes and folder exclusions passed.',
+      'ROS 2 colcon: real ament discovery, package grouping, environment, cwd, all parallel modes and folder exclusions passed.',
     );
   } finally {
     await fs.rm(root, { recursive: true, force: true });

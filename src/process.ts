@@ -57,7 +57,12 @@ export function runProcess(
     };
     const stop = () => {
       kill('SIGTERM');
-      escalation ??= setTimeout(() => kill('SIGKILL'), 1000);
+      escalation ??= setTimeout(() => {
+        kill('SIGKILL');
+        // Detached descendants can retain these pipes after the test process exits.
+        child.stdout.destroy();
+        child.stderr.destroy();
+      }, 1000);
     };
     const abort = () => {
       cancelled = true;
@@ -114,12 +119,18 @@ interface Job {
   resolve: (v: any) => void;
   reject: (e: Error) => void;
   signal?: AbortSignal;
+}
+
+/** Queued work sharing one cancellation listener. */
+interface SignalJobs {
+  jobs: Set<Job>;
   abort: () => void;
 }
 /** One scheduler is shared by discovery and every run, across workspace folders. */
 export class Scheduler {
   private active = 0;
-  private queue: Job[] = [];
+  private queue = new Set<Job>();
+  private signals = new Map<AbortSignal, SignalJobs>();
   /** Create a queue with a shared process limit. */
   constructor(private limit: number) {}
   /** Change the limit for subsequent queued work. */
@@ -133,28 +144,55 @@ export class Scheduler {
       return Promise.reject(new Error('Cancelled'));
     }
     return new Promise<T>((resolve, reject) => {
-      const job: Job = {
-        task,
-        resolve,
-        reject,
-        signal,
-        abort: () => {
-          const index = this.queue.indexOf(job);
-          if (index >= 0) {
-            this.queue.splice(index, 1);
-            reject(new Error('Cancelled'));
-          }
-        },
-      };
-      signal?.addEventListener('abort', job.abort, { once: true });
-      this.queue.push(job);
+      const job: Job = { task, resolve, reject, signal };
+      this.queue.add(job);
+      this.watchCancellation(job);
       this.pump();
     });
   }
+  /** Share a cancellation listener across all queued jobs in the same request. */
+  private watchCancellation(job: Job): void {
+    const signal = job.signal;
+    if (!signal) return;
+    let group = this.signals.get(signal);
+    if (!group) {
+      group = { jobs: new Set(), abort: () => this.cancelQueued(signal) };
+      this.signals.set(signal, group);
+      signal.addEventListener('abort', group.abort, { once: true });
+    }
+    group.jobs.add(job);
+  }
+
+  /** Remove cancelled work without repeatedly scanning and shifting the queue. */
+  private cancelQueued(signal: AbortSignal): void {
+    const group = this.signals.get(signal);
+    if (!group) return;
+    signal.removeEventListener('abort', group.abort);
+    this.signals.delete(signal);
+    for (const job of group.jobs) {
+      this.queue.delete(job);
+      job.reject(new Error('Cancelled'));
+    }
+  }
+
+  /** Release queued cancellation tracking when a job starts. */
+  private unwatchCancellation(job: Job): void {
+    const signal = job.signal;
+    if (!signal) return;
+    const group = this.signals.get(signal);
+    if (!group) return;
+    group.jobs.delete(job);
+    if (!group.jobs.size) {
+      signal.removeEventListener('abort', group.abort);
+      this.signals.delete(signal);
+    }
+  }
+
   private pump() {
-    while (this.active < this.limit && this.queue.length) {
-      const job = this.queue.shift()!;
-      job.signal?.removeEventListener('abort', job.abort);
+    while (this.active < this.limit && this.queue.size) {
+      const job = this.queue.values().next().value!;
+      this.queue.delete(job);
+      this.unwatchCancellation(job);
       this.active++;
       Promise.resolve()
         .then(() => {

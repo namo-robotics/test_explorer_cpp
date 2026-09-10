@@ -180,19 +180,27 @@
         "cppTestExplorer.concurrency": {
           "type": "integer",
           "default": 0,
-          "description": "Maximum concurrent processes across requests. 0 selects min(4, available CPUs). In multi-root workspaces the smallest resolved limit applies.",
+          "description": "Maximum concurrent processes across requests. 0 uses the number of available CPU cores. In multi-root workspaces the smallest resolved limit applies.",
           "scope": "resource",
           "minimum": 0
         },
         "cppTestExplorer.parallelMode": {
           "type": "string",
           "default": "case",
-          "description": "Parallelize executables, or run each selected case in a separate process.",
+          "description": "Run one process per executable, per case, or per batch of cases.",
           "scope": "resource",
           "enum": [
             "executable",
-            "case"
+            "case",
+            "batch"
           ]
+        },
+        "cppTestExplorer.batchSize": {
+          "type": "integer",
+          "default": 25,
+          "minimum": 1,
+          "scope": "resource",
+          "description": "Maximum cases per process in batch mode. Batches share the concurrency limit. Long test filters may produce smaller batches."
         },
         "cppTestExplorer.discoveryTimeout": {
           "type": "number",

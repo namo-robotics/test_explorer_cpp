@@ -2,6 +2,8 @@
 import * as vscode from 'vscode';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import os from 'node:os';
+import { settingsFor } from '../../src/config';
 import type { Explorer } from '../../src/extension';
 import type { DebugAdapter } from '../../src/debug';
 
@@ -14,6 +16,10 @@ const children = (items: vscode.TestItemCollection) => {
 export async function run() {
   const extension = vscode.extensions.getExtension<Explorer>('namo-robotics.cpp-test-explorer');
   assert(extension, 'Extension is installed in the test host');
+  const configured = settingsFor(vscode.workspace.workspaceFolders![0]);
+  assert.equal(configured.parallelMode, 'batch');
+  assert.equal(configured.batchSize, 2);
+  assert.equal(configured.concurrency, os.availableParallelism());
   const explorer = await extension.activate();
   await explorer.refresh();
   const roots = children(explorer.controller.items);
@@ -47,6 +53,8 @@ export async function run() {
     'Refresh reuses TestItem instances',
   );
   assert.equal(basic.children.get(oldId), pass);
+
+  await verifyCancellationDuringRefresh(explorer, pass);
 
   const recorded = new Map<string, string>();
   let output = '';
@@ -149,5 +157,37 @@ export async function run() {
   } finally {
     token.dispose();
     explorer.controller.createTestRun = original;
+  }
+}
+
+/** Ensure Stop releases a run even while its discovery refresh is still pending. */
+async function verifyCancellationDuringRefresh(
+  explorer: Explorer,
+  item: vscode.TestItem,
+): Promise<void> {
+  const state = explorer as unknown as { refreshPromise: Promise<void> };
+  const previous = state.refreshPromise;
+  let finishRefresh!: () => void;
+  state.refreshPromise = new Promise((resolve) => {
+    finishRefresh = resolve;
+  });
+  const cancellation = new vscode.CancellationTokenSource();
+  let timer: NodeJS.Timeout | undefined;
+  const running = explorer.run(new vscode.TestRunRequest([item]), cancellation.token);
+  try {
+    cancellation.cancel();
+    const stopped = await Promise.race([
+      running.then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), 1000);
+      }),
+    ]);
+    assert(stopped, 'Cancelling a run must not wait for discovery to finish');
+  } finally {
+    clearTimeout(timer);
+    finishRefresh();
+    state.refreshPromise = previous;
+    await running;
+    cancellation.dispose();
   }
 }

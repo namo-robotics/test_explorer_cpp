@@ -569,7 +569,7 @@ class DiscoverySession {
         });
       }
       if (!candidate.cases.length) {
-        diagnostics.push(`${candidate.path}: no Google Test cases were listed.`);
+        return undefined;
       }
       return candidate;
     } catch (e) {

@@ -31,6 +31,8 @@ async function main() {
       path.join(workspace, '.vscode/settings.json'),
       JSON.stringify({
         'cppTestExplorer.autoSourceWorkspace': false,
+        'cppTestExplorer.parallelMode': 'batch',
+        'cppTestExplorer.batchSize': 2,
         'extensions.autoUpdate': false,
         'extensions.autoCheckUpdates': false,
         'cppTestExplorer.debug': {

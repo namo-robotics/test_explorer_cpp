@@ -19,6 +19,7 @@ export function settingsFor(folder: vscode.WorkspaceFolder): Settings {
     env: config.get('env', {}),
     concurrency: config.get('concurrency', 0),
     parallelMode: config.get('parallelMode', 'case'),
+    batchSize: config.get('batchSize', 25),
     discoveryTimeout: config.get('discoveryTimeout', 30),
     timeout: config.get('timeout', null),
     runDisabled: config.get('runDisabled', false),
@@ -33,15 +34,18 @@ function validateSettings(settings: Settings): void {
   if (!Number.isInteger(settings.concurrency) || settings.concurrency < 0) {
     throw new Error('concurrency must be a nonnegative integer');
   }
-  settings.concurrency ||= Math.max(1, Math.min(4, os.availableParallelism()));
+  settings.concurrency ||= Math.max(1, os.availableParallelism());
   if (!(settings.discoveryTimeout > 0) || !Number.isFinite(settings.discoveryTimeout)) {
     throw new Error('discoveryTimeout must be positive');
   }
   if (settings.timeout !== null && (!Number.isFinite(settings.timeout) || settings.timeout < 0)) {
     throw new Error('timeout must be null or a nonnegative number');
   }
-  if (!['case', 'executable'].includes(settings.parallelMode)) {
-    throw new Error('parallelMode must be executable or case');
+  if (!['case', 'executable', 'batch'].includes(settings.parallelMode)) {
+    throw new Error('parallelMode must be executable, case or batch');
+  }
+  if (!Number.isInteger(settings.batchSize) || settings.batchSize < 1) {
+    throw new Error('batchSize must be a positive integer');
   }
   for (const key of ['sourceRoots', 'buildDirectories', 'exclude', 'setupScripts'] as const) {
     if (!Array.isArray(settings[key]) || settings[key].some((value) => typeof value !== 'string')) {

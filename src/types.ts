@@ -25,7 +25,8 @@ export interface Settings {
   autoSourceWorkspace: boolean;
   env: Environment;
   concurrency: number;
-  parallelMode: 'executable' | 'case';
+  parallelMode: 'executable' | 'case' | 'batch';
+  batchSize: number;
   discoveryTimeout: number;
   timeout: number | null;
   runDisabled: boolean;

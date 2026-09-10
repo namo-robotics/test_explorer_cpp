@@ -163,7 +163,7 @@ export class Explorer implements vscode.Disposable {
       }
     }
     this.scheduler.setLimit(
-      Math.min(...[...configurations.values()].map((s) => s.concurrency), 1024),
+      configurations.size ? Math.min(...[...configurations.values()].map((s) => s.concurrency)) : 1,
     );
     const discoveries: {
       folder: vscode.WorkspaceFolder;
@@ -239,6 +239,23 @@ export class Explorer implements vscode.Disposable {
       }
     }
   }
+  /** Let a cancelled run stop waiting for an unrelated discovery refresh. */
+  private waitForRefresh(token: vscode.CancellationToken): Promise<boolean> {
+    if (token.isCancellationRequested) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const subscription = token.onCancellationRequested(() => finish(false));
+      const finish = (ready: boolean) => {
+        subscription.dispose();
+        resolve(ready);
+      };
+      this.refreshPromise.then(
+        () => finish(true),
+        () => finish(false),
+      );
+      if (token.isCancellationRequested) finish(false);
+    });
+  }
+
   /** Execute or debug a selection using the native Testing result interface. */
   async run(
     request: vscode.TestRunRequest,
@@ -249,8 +266,8 @@ export class Explorer implements vscode.Disposable {
       void vscode.window.showErrorMessage('Trust this workspace before running Google Tests.');
       return;
     }
-    await this.refreshPromise;
-    if (this.disposed) {
+    const refreshed = await this.waitForRefresh(token);
+    if (!refreshed || token.isCancellationRequested || this.disposed) {
       return;
     }
     const run = this.controller.createTestRun(request);

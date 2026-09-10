@@ -7,6 +7,7 @@ import { parseList, parseResults, testArgs, testEnvironment, OutputRouter } from
 import { debugConfiguration } from '../src/debug';
 import { Scheduler } from '../src/process';
 import { selectLeaves } from '../src/selection';
+import { batches } from '../src/runner';
 import { settings } from './helpers';
 
 test('typed, value-parameterized and disabled Google Test names are preserved', () => {
@@ -223,4 +224,44 @@ test('selection deduplicates and honors ancestor exclusions for direct leaf requ
     selectLeaves([root], [leaf], [suite], (n) => n === leaf),
     [],
   );
+});
+
+test('batch mode partitions a large selection without dropping or repeating cases', () => {
+  const cases = Array.from({ length: 1000 }, (_, index) => ({
+    name: `Suite.Case${index}`,
+    suite: 'Suite',
+    label: `Case${index}`,
+    disabled: false,
+  }));
+  const grouped = batches(cases, 'batch', 25);
+  assert.equal(grouped.length, 40);
+  assert(grouped.every((batch) => batch.length === 25));
+  assert.deepEqual(grouped.flat(), cases);
+  assert.deepEqual(
+    batches(cases.slice(0, 26), 'batch', 25).map((batch) => batch.length),
+    [25, 1],
+  );
+  assert.deepEqual(batches([], 'batch', 25), []);
+  assert.equal(batches(cases, 'batch', 1).length, cases.length);
+  assert.equal(batches(cases, 'batch', 2000).length, 1);
+  assert.equal(batches(cases, 'executable', 1).length, 1);
+  assert.equal(batches(cases, 'case', 25).length, cases.length);
+  for (const invalid of [0, -1, 1.5, NaN, Infinity]) {
+    assert.throws(() => batches(cases, 'batch', invalid), /positive integer/);
+  }
+});
+
+test('batch mode retains the command-length limit', () => {
+  const cases = Array.from({ length: 3 }, (_, index) => ({
+    name: `Suite.${'A'.repeat(20000)}${index}`,
+    suite: 'Suite',
+    label: String(index),
+    disabled: false,
+  }));
+  const grouped = batches(cases, 'batch', 25);
+  assert.deepEqual(
+    grouped.map((batch) => batch.length),
+    [1, 1, 1],
+  );
+  assert.deepEqual(grouped.flat(), cases);
 });

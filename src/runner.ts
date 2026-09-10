@@ -47,16 +47,24 @@ export async function readResults(
   });
 }
 /** Split a selection into process-sized batches for the chosen execution mode. */
-export function batches(cases: TestCase[], mode: Settings['parallelMode']): TestCase[][] {
+export function batches(
+  cases: TestCase[],
+  mode: Settings['parallelMode'],
+  batchSize = 25,
+): TestCase[][] {
   if (mode === 'case') {
     return cases.map((test) => [test]);
   }
+  if (mode === 'batch' && (!Number.isInteger(batchSize) || batchSize < 1)) {
+    throw new Error('batchSize must be a positive integer');
+  }
+  const maxCases = mode === 'batch' ? batchSize : Infinity;
   // Avoid ARG_MAX limits in very large binaries while keeping normal runs in one process.
   const result: TestCase[][] = [];
   let batch: TestCase[] = [];
   let length = 0;
   for (const test of cases) {
-    if (length + test.name.length > 32000 && batch.length) {
+    if (batch.length && (length + test.name.length > 32000 || batch.length >= maxCases)) {
       result.push(batch);
       batch = [];
       length = 0;
@@ -85,7 +93,7 @@ export async function runExecutable(
     }
     return true;
   });
-  const jobs = batches(runnable, settings.parallelMode).map(async (batch) => {
+  const jobs = batches(runnable, settings.parallelMode, settings.batchSize).map(async (batch) => {
     try {
       await scheduler.schedule(async () => {
         await runBatch(executable, batch, settings, events, signal);
