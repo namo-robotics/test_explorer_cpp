@@ -2,7 +2,7 @@
   "name": "cpp-test-explorer",
   "displayName": "C++ Test Explorer",
   "description": "Google Test explorer for CMake and ROS 2 colcon workspaces.",
-  "version": "0.1.1",
+  "version": "0.1.4",
   "publisher": "namo-robotics",
   "license": "MIT",
   "engines": {

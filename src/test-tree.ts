@@ -82,7 +82,14 @@ export class TestTree {
         this.controller.createTestItem(suiteId, test.suite);
       suites.set(suiteId, suite);
       const id = stableId(executable.id, test.name);
-      const leaf = suite.children.get(id) ?? this.controller.createTestItem(id, test.label);
+      const uri = test.source ? vscode.Uri.file(test.source.file) : undefined;
+      let leaf = suite.children.get(id);
+      if (!leaf || leaf.uri?.toString() !== uri?.toString()) {
+        leaf = this.controller.createTestItem(id, test.label, uri);
+      }
+      leaf.range = test.source
+        ? new vscode.Range(test.source.line, 0, test.source.line, 0)
+        : undefined;
       leaf.tags = [this.debugTag];
       leaf.description = test.disabled || executable.disabled ? 'disabled' : undefined;
       this.bindings.set(id, { executable, test, folder, settings });

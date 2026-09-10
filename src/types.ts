@@ -31,12 +31,18 @@ export interface Settings {
   runDisabled: boolean;
   debug: { lldb: Record<string, unknown>; cppdbg: Record<string, unknown> };
 }
+/** A source file and zero-based line identifying a test definition. */
+export interface SourceLocation {
+  file: string;
+  line: number;
+}
 /** A discovered Google Test case with its original filter name. */
 export interface TestCase {
   name: string;
   suite: string;
   label: string;
   disabled: boolean;
+  source?: SourceLocation;
 }
 /** A test program together with its execution environment and cases. */
 export interface Executable {

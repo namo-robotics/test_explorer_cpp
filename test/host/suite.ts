@@ -1,6 +1,7 @@
 /** Verify the test tree and run lifecycle inside VS Code. */
 import * as vscode from 'vscode';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import type { Explorer } from '../../src/extension';
 import type { DebugAdapter } from '../../src/debug';
 
@@ -28,6 +29,16 @@ export async function run() {
   const pass = children(basic.children).find((test) => test.label === 'Pass')!;
   const fail = children(basic.children).find((test) => test.label === 'Fail')!;
   const skip = children(basic.children).find((test) => test.label === 'Skip')!;
+  const source = process.env.CPP_TEST_SOURCE!;
+  const sourceLines = (await fs.readFile(source, 'utf8')).split('\n');
+  assert.equal(pass.uri?.fsPath, source);
+  assert.equal(
+    pass.range?.start.line,
+    sourceLines.findIndex((line) => line.startsWith('TEST(Basic, Pass)')),
+  );
+  const editor = await vscode.window.showTextDocument(pass.uri!, { selection: pass.range });
+  assert.equal(editor.document.uri.fsPath, source);
+  assert.equal(editor.selection.start.line, pass.range!.start.line);
   const oldId = pass.id;
   await explorer.refresh();
   assert.equal(
@@ -61,6 +72,13 @@ export async function run() {
   };
   const token = new vscode.CancellationTokenSource();
   try {
+    await vscode.commands.executeCommand('testing.runAtCursor');
+    assert.deepEqual([...recorded], [[pass.id, 'passed']], 'Run at cursor selects one case');
+    recorded.clear();
+    editor.selection = new vscode.Selection(fail.range!.start, fail.range!.start);
+    await vscode.commands.executeCommand('testing.runAtCursor');
+    assert.deepEqual([...recorded], [[fail.id, 'failed']], 'Moving the cursor changes the case');
+    recorded.clear();
     await explorer.run(new vscode.TestRunRequest([basic], [fail]), token.token);
     assert.equal(recorded.get(pass.id), 'passed');
     assert.equal(recorded.get(skip.id), 'skipped');

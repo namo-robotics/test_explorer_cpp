@@ -2,6 +2,8 @@
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { attachSourceLocations } from './test-locations';
 import { createHash } from 'node:crypto';
 import { minimatch } from 'minimatch';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
@@ -509,31 +511,54 @@ class DiscoverySession {
     return [...unique.values()];
   }
 
+  /** Request names and optional source metadata, then remove the temporary listing. */
+  private async readCaseListing(candidate: Executable) {
+    const { settings, signal } = this;
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'cpp-test-list-'));
+    const listingFile = path.join(directory, 'tests.xml');
+    try {
+      const result = await runProcess(
+        candidate.path,
+        [
+          ...candidate.args,
+          '--gtest_list_tests',
+          '--gtest_color=no',
+          `--gtest_output=xml:${listingFile}`,
+        ],
+        {
+          cwd: candidate.cwd,
+          env: testEnvironment(candidate.env),
+          timeout: settings.discoveryTimeout,
+          signal,
+        },
+      );
+      candidate.cases = parseList(result.stdout);
+      const packageSource = this.scan.packages.find(
+        (pkg) => pkg.name === candidate.package,
+      )?.source;
+      await attachSourceLocations(candidate.cases, listingFile, [
+        candidate.cwd,
+        path.dirname(candidate.path),
+        this.root,
+        ...(packageSource ? [packageSource] : []),
+      ]);
+      return result;
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  }
+
   /** List one binary and keep the cases selected by its CTest registrations. */
   private async listCases(candidate: Executable): Promise<Executable | undefined> {
-    const { settings, scheduler, signal, diagnostics, watchPaths } = this;
+    const { scheduler, signal, diagnostics, watchPaths } = this;
     watchPaths.add(candidate.path);
     try {
-      const result = await scheduler.schedule(
-        () =>
-          runProcess(
-            candidate.path,
-            [...candidate.args, '--gtest_list_tests', '--gtest_color=no'],
-            {
-              cwd: candidate.cwd,
-              env: testEnvironment(candidate.env),
-              timeout: settings.discoveryTimeout,
-              signal,
-            },
-          ),
-        signal,
-      );
+      const result = await scheduler.schedule(() => this.readCaseListing(candidate), signal);
       if (result.code !== 0 || result.timedOut || result.cancelled || result.truncated) {
         throw new Error(
           `Google Test listing failed (${result.timedOut ? 'timeout' : result.code}): ${result.stderr || result.stdout}`,
         );
       }
-      candidate.cases = parseList(result.stdout);
       const registrations = candidate.registrations;
       if (registrations) {
         candidate.cases = candidate.cases.flatMap((test) => {

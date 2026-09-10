@@ -56,6 +56,24 @@ test('real CMake Google Test discovery preserves all cases and stable IDs', asyn
   const again = await discover(root, settings(), new Scheduler(2));
   assert.equal(again.executables[0].id, executable.id);
 });
+test('real discovery locates ordinary, disabled, typed and parameterized definitions', async () => {
+  const file = path.resolve('test/fixtures/cmake/tests.cpp');
+  const lines = (await fs.readFile(file, 'utf8')).split('\n');
+  for (const [name, definition] of [
+    ['Basic.Pass', 'TEST(Basic, Pass)'],
+    ['Basic.DISABLED_Optional', 'TEST(Basic, DISABLED_Optional)'],
+    ['Numbers/Values.Positive/0', 'TEST_P(Values, Positive)'],
+    ['Numbers/Values.Positive/1', 'TEST_P(Values, Positive)'],
+    ['Typed/0.Works', 'TYPED_TEST(Typed, Works)'],
+  ]) {
+    const testCase = executable.cases.find((testCase) => testCase.name === name);
+    assert.deepEqual(
+      testCase?.source,
+      { file, line: lines.findIndex((line) => line.startsWith(definition)) },
+      name,
+    );
+  }
+});
 for (const mode of ['executable', 'case'] as const)
   test(`real runs report pass/fail/skip, output and disabled cases in ${mode} mode`, async () => {
     const results: CaseResult[] = [],

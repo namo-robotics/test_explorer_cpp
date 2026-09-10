@@ -6,13 +6,13 @@ Google Test support for VS Code's native Testing view, by **Namo Robotics** (`na
 
 ## Install and use
 
-Run `./build-vsix.sh`, then install `cpp-test-explorer-0.1.1.vsix` using **Extensions: Install from VSIX…**. The script installs locked dependencies, compiles and packages the extension. Requires Node 22+ and npm. Optional packaging arguments are forwarded, e.g. `./build-vsix.sh --out /tmp/explorer.vsix`.
+Run `./build-vsix.sh`, then install `cpp-test-explorer-0.1.3.vsix` using **Extensions: Install from VSIX…**. The script installs locked dependencies, compiles and packages the extension. Requires Node 22+ and npm. Optional packaging arguments are forwarded, e.g. `./build-vsix.sh --out /tmp/explorer.vsix`.
 
 Build your C++ project with testing enabled, open its workspace folder, and open VS Code's Testing view. The tree is **Workspace → Package/Project → Executable → Suite → Case**. Run all tests, any group, or a single case using the standard Testing actions.
 
 Select a case to debug with **CodeLLDB** (`vadimcn.vscode-lldb`) or **C++ / GDB** (`ms-vscode.cpptools`). Install the debugger in the remote environment when using Remote SSH, WSL or a container. GDB must also be installed for cpptools. VS Code remembers your chosen default debug profile.
 
-Use **C++ Test Explorer: Refresh Tests** after building if needed. Binaries, discovered metadata, package manifests and setup scripts are watched automatically. **C++ Test Explorer: Show Discovery Output** explains discovery problems. Test stdout/stderr appear in Testing output; debugger output uses its Debug Console or terminal. Source gutter actions are not provided in this version.
+Use **C++ Test Explorer: Refresh Tests** after building if needed. Binaries, discovered metadata, package manifests and setup scripts are watched automatically. **C++ Test Explorer: Show Discovery Output** explains discovery problems. Test stdout/stderr appear in Testing output; debugger output uses its Debug Console or terminal. Test cases with source metadata support **Go to Test** navigation and native source gutter actions. Locations come from the built binary, so rebuild and refresh after moving a test definition. Navigation is unavailable when the binary omits source metadata or the reported file cannot be found locally.
 
 ## ROS 2
 
