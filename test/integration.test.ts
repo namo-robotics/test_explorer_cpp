@@ -81,7 +81,7 @@ for (const mode of ['executable', 'case', 'batch'] as const)
     await runExecutable(
       executable,
       executable.cases.filter((c) => c.suite === 'Basic'),
-      settings({ parallelMode: mode, batchSize: 2 }),
+      settings({ parallelMode: mode }),
       new Scheduler(2),
       { started: () => {}, result: (r) => results.push(r), output: (text) => output.push(text) },
       new AbortController().signal,
@@ -380,25 +380,39 @@ test('cancelling a batch stops its process and skips batches still in the queue'
   const results: CaseResult[] = [];
   const started: string[] = [];
   let launches = 0;
-  await runExecutable(
-    executable,
-    selected,
-    settings({ parallelMode: 'batch', batchSize: 2 }),
-    new Scheduler(1),
-    {
-      started: (testCase) => started.push(testCase.name),
-      result: (result) => results.push(result),
-      output: (text) => {
-        if (text.startsWith(`Running ${executable.path} (`)) launches++;
-        if (/\[ RUN\s+\] Process.Slow/.test(text)) abort.abort();
-      },
-    },
-    abort.signal,
+  const scheduler = new Scheduler(2);
+  let release!: () => void;
+  const occupied = scheduler.schedule(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
   );
+  await Promise.resolve();
+  try {
+    await runExecutable(
+      executable,
+      selected,
+      settings({ parallelMode: 'batch' }),
+      scheduler,
+      {
+        started: (testCase) => started.push(testCase.name),
+        result: (result) => results.push(result),
+        output: (text) => {
+          if (text.startsWith(`Running ${executable.path} (`)) launches++;
+          if (/\[ RUN\s+\] Process.Slow/.test(text)) abort.abort();
+        },
+      },
+      abort.signal,
+    );
+  } finally {
+    release();
+    await occupied;
+  }
   assert(abort.signal.aborted, 'Cancel while a test in the first batch is running');
   assert.equal(launches, 1);
-  assert.deepEqual(started, ['Process.Slow', 'Basic.Pass']);
+  assert.deepEqual(started, ['Process.Slow', 'Basic.Fail']);
   assert.equal(results.length, selected.length);
   assert.equal(new Set(results.map((result) => result.name)).size, selected.length);
-  assert.equal(results.find((result) => result.name === 'Basic.Fail')?.state, 'skipped');
+  assert.equal(results.find((result) => result.name === 'Basic.Pass')?.state, 'skipped');
 });

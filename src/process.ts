@@ -133,6 +133,10 @@ export class Scheduler {
   private signals = new Map<AbortSignal, SignalJobs>();
   /** Create a queue with a shared process limit. */
   constructor(private limit: number) {}
+  /** The shared process limit used when distributing tests into batches. */
+  get concurrency(): number {
+    return this.limit;
+  }
   /** Change the limit for subsequent queued work. */
   setLimit(limit: number) {
     this.limit = Math.max(1, limit);

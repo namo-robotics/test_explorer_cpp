@@ -1,6 +1,7 @@
 /** Read and validate settings for an individual VS Code workspace folder. */
 import * as vscode from 'vscode';
 import os from 'node:os';
+import { validateTestGrouping } from './test-grouping';
 import type { Settings } from './types';
 
 /** Read settings and reject invalid values before starting processes. */
@@ -19,7 +20,7 @@ export function settingsFor(folder: vscode.WorkspaceFolder): Settings {
     env: config.get('env', {}),
     concurrency: config.get('concurrency', 0),
     parallelMode: config.get('parallelMode', 'case'),
-    batchSize: config.get('batchSize', 25),
+    testGrouping: config.get('testGrouping', {}),
     discoveryTimeout: config.get('discoveryTimeout', 30),
     timeout: config.get('timeout', null),
     runDisabled: config.get('runDisabled', false),
@@ -31,6 +32,7 @@ export function settingsFor(folder: vscode.WorkspaceFolder): Settings {
 
 /** Reject invalid configuration values and resolve automatic concurrency. */
 function validateSettings(settings: Settings): void {
+  validateTestGrouping(settings.testGrouping);
   if (!Number.isInteger(settings.concurrency) || settings.concurrency < 0) {
     throw new Error('concurrency must be a nonnegative integer');
   }
@@ -43,9 +45,6 @@ function validateSettings(settings: Settings): void {
   }
   if (!['case', 'executable', 'batch'].includes(settings.parallelMode)) {
     throw new Error('parallelMode must be executable, case or batch');
-  }
-  if (!Number.isInteger(settings.batchSize) || settings.batchSize < 1) {
-    throw new Error('batchSize must be a positive integer');
   }
   for (const key of ['sourceRoots', 'buildDirectories', 'exclude', 'setupScripts'] as const) {
     if (!Array.isArray(settings[key]) || settings[key].some((value) => typeof value !== 'string')) {
@@ -66,5 +65,6 @@ function validateSettings(settings: Settings): void {
     ) {
       throw new Error('Invalid explicit executable configuration');
     }
+    if (entry.testGrouping !== undefined) validateTestGrouping(entry.testGrouping);
   }
 }

@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import { settingsFor } from '../../src/config';
 import type { Explorer } from '../../src/extension';
+import { verifyGrouping } from './grouping';
 import type { DebugAdapter } from '../../src/debug';
 
 const children = (items: vscode.TestItemCollection) => {
@@ -16,9 +17,9 @@ const children = (items: vscode.TestItemCollection) => {
 export async function run() {
   const extension = vscode.extensions.getExtension<Explorer>('namo-robotics.cpp-test-explorer');
   assert(extension, 'Extension is installed in the test host');
+  verifyGrouping();
   const configured = settingsFor(vscode.workspace.workspaceFolders![0]);
   assert.equal(configured.parallelMode, 'batch');
-  assert.equal(configured.batchSize, 2);
   assert.equal(configured.concurrency, os.availableParallelism());
   const explorer = await extension.activate();
   await explorer.refresh();
@@ -29,7 +30,9 @@ export async function run() {
   assert.equal(groups.length, 1);
   const binaries = children(groups[0].children);
   assert.equal(binaries.length, 1);
-  const suites = children(binaries[0].children);
+  const descendants = (item: vscode.TestItem): vscode.TestItem[] =>
+    children(item.children).flatMap((child) => [child, ...descendants(child)]);
+  const suites = descendants(binaries[0]);
   const basic = suites.find((suite) => suite.label === 'Basic')!;
   assert(basic);
   const pass = children(basic.children).find((test) => test.label === 'Pass')!;
@@ -55,6 +58,8 @@ export async function run() {
   assert.equal(basic.children.get(oldId), pass);
 
   await verifyCancellationDuringRefresh(explorer, pass);
+  await verifyRunDuringRefresh(explorer, pass, false);
+  await verifyRunDuringRefresh(explorer, pass, true);
 
   const recorded = new Map<string, string>();
   let output = '';
@@ -165,8 +170,16 @@ async function verifyCancellationDuringRefresh(
   explorer: Explorer,
   item: vscode.TestItem,
 ): Promise<void> {
-  const state = explorer as unknown as { refreshPromise: Promise<void> };
+  const state = explorer as unknown as {
+    refreshPromise: Promise<void>;
+    refreshAbort?: AbortController;
+    discoveredConfiguration?: string;
+  };
   const previous = state.refreshPromise;
+  const previousAbort = state.refreshAbort;
+  const previousConfiguration = state.discoveredConfiguration;
+  state.refreshAbort = new AbortController();
+  state.discoveredConfiguration = undefined;
   let finishRefresh!: () => void;
   state.refreshPromise = new Promise((resolve) => {
     finishRefresh = resolve;
@@ -187,7 +200,65 @@ async function verifyCancellationDuringRefresh(
     clearTimeout(timer);
     finishRefresh();
     state.refreshPromise = previous;
+    state.refreshAbort = previousAbort;
+    state.discoveredConfiguration = previousConfiguration;
     await running;
     cancellation.dispose();
+  }
+}
+
+/** Check that cached runs bypass background discovery, but stale settings still wait. */
+async function verifyRunDuringRefresh(
+  explorer: Explorer,
+  item: vscode.TestItem,
+  stale: boolean,
+): Promise<void> {
+  const state = explorer as unknown as {
+    refreshPromise: Promise<void>;
+    refreshAbort?: AbortController;
+    discoveredConfiguration?: string;
+  };
+  const previous = state.refreshPromise;
+  const previousAbort = state.refreshAbort;
+  const previousConfiguration = state.discoveredConfiguration;
+  const refreshAbort = new AbortController();
+  state.refreshAbort = refreshAbort;
+  if (stale) state.discoveredConfiguration = 'outdated settings';
+  let finishRefresh!: () => void;
+  state.refreshPromise = new Promise((resolve) => {
+    finishRefresh = resolve;
+  });
+  const token = new vscode.CancellationTokenSource();
+  let timer: NodeJS.Timeout | undefined;
+  let completed = false;
+  const running = explorer.run(new vscode.TestRunRequest([item]), token.token).then(() => {
+    completed = true;
+  });
+  try {
+    if (stale) {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      assert(!completed, 'Changed settings require discovery before executing cached tests');
+      assert(!refreshAbort.signal.aborted);
+      state.discoveredConfiguration = previousConfiguration;
+      finishRefresh();
+    }
+    const finished = await Promise.race([
+      running.then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), 1500);
+      }),
+    ]);
+    assert(finished, 'Already discovered tests must not wait for unrelated background discovery');
+    if (!stale)
+      assert(refreshAbort.signal.aborted, 'Cached runs release background discovery slots');
+  } finally {
+    clearTimeout(timer);
+    token.cancel();
+    finishRefresh();
+    state.refreshPromise = previous;
+    state.refreshAbort = previousAbort;
+    state.discoveredConfiguration = previousConfiguration;
+    await running;
+    token.dispose();
   }
 }

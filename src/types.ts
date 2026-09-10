@@ -1,6 +1,11 @@
 /** Shared configuration, discovery and result data used by the extension. */
 /** Environment variables passed to a child process. */
 export type Environment = Record<string, string>;
+/** The display hierarchy used below each test executable. */
+export type TestGrouping =
+  | { groupBySourceFolder?: Record<string, never> }
+  | { groupBySuite: Record<string, never> }
+  | { groupBySplittedTestName: { splitBy?: string } };
 /** An explicitly configured Google Test program. */
 export interface ManualExecutable {
   id: string;
@@ -11,6 +16,7 @@ export interface ManualExecutable {
   cwd?: string;
   env?: Environment;
   timeout?: number;
+  testGrouping?: TestGrouping;
 }
 /** Resolved settings for one workspace folder. */
 export interface Settings {
@@ -26,7 +32,7 @@ export interface Settings {
   env: Environment;
   concurrency: number;
   parallelMode: 'executable' | 'case' | 'batch';
-  batchSize: number;
+  testGrouping: TestGrouping;
   discoveryTimeout: number;
   timeout: number | null;
   runDisabled: boolean;
@@ -58,6 +64,7 @@ export interface Executable {
   timeout: number;
   disabled: boolean;
   cases: TestCase[];
+  testGrouping?: TestGrouping;
   registrations?: { filter: string; disabled: boolean }[];
 }
 /** Discovered programs, diagnostics and files to watch for changes. */

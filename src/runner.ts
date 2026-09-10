@@ -46,36 +46,41 @@ export async function readResults(
     return result;
   });
 }
-/** Split a selection into process-sized batches for the chosen execution mode. */
+/** Distribute tests across process slots and respect the command-line size limit. */
 export function batches(
   cases: TestCase[],
   mode: Settings['parallelMode'],
-  batchSize = 25,
+  concurrency = 1,
 ): TestCase[][] {
-  if (mode === 'case') {
-    return cases.map((test) => [test]);
+  if (mode === 'case') return cases.map((test) => [test]);
+  if (mode === 'executable') return splitByFilterLength(cases);
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new Error('Batch concurrency must be a positive integer');
   }
-  if (mode === 'batch' && (!Number.isInteger(batchSize) || batchSize < 1)) {
-    throw new Error('batchSize must be a positive integer');
-  }
-  const maxCases = mode === 'batch' ? batchSize : Infinity;
-  // Avoid ARG_MAX limits in very large binaries while keeping normal runs in one process.
-  const result: TestCase[][] = [];
-  let batch: TestCase[] = [];
+  const groups: TestCase[][] = Array.from(
+    { length: Math.min(cases.length, concurrency) },
+    () => [],
+  );
+  cases.forEach((test, index) => groups[index % groups.length].push(test));
+  return groups.flatMap(splitByFilterLength);
+}
+
+/** Split long filters without losing or duplicating selected tests. */
+function splitByFilterLength(cases: TestCase[]): TestCase[][] {
+  const groups: TestCase[][] = [];
+  let group: TestCase[] = [];
   let length = 0;
   for (const test of cases) {
-    if (batch.length && (length + test.name.length > 32000 || batch.length >= maxCases)) {
-      result.push(batch);
-      batch = [];
+    if (group.length && length + test.name.length > 32000) {
+      groups.push(group);
+      group = [];
       length = 0;
     }
-    batch.push(test);
+    group.push(test);
     length += test.name.length + 1;
   }
-  if (batch.length) {
-    result.push(batch);
-  }
-  return result;
+  if (group.length) groups.push(group);
+  return groups;
 }
 /** Run selected cases through the shared queue and report every outcome. */
 export async function runExecutable(
@@ -93,21 +98,23 @@ export async function runExecutable(
     }
     return true;
   });
-  const jobs = batches(runnable, settings.parallelMode, settings.batchSize).map(async (batch) => {
-    try {
-      await scheduler.schedule(async () => {
-        await runBatch(executable, batch, settings, events, signal);
-      }, signal);
-    } catch (e) {
-      batch.forEach((test) =>
-        events.result({
-          name: test.name,
-          state: signal.aborted ? 'skipped' : 'errored',
-          message: String(e),
-        }),
-      );
-    }
-  });
+  const jobs = batches(runnable, settings.parallelMode, scheduler.concurrency).map(
+    async (batch) => {
+      try {
+        await scheduler.schedule(async () => {
+          await runBatch(executable, batch, settings, events, signal);
+        }, signal);
+      } catch (e) {
+        batch.forEach((test) =>
+          events.result({
+            name: test.name,
+            state: signal.aborted ? 'skipped' : 'errored',
+            message: String(e),
+          }),
+        );
+      }
+    },
+  );
   await Promise.all(jobs);
 }
 

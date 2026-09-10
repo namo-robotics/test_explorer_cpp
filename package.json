@@ -2,7 +2,7 @@
   "name": "cpp-test-explorer",
   "displayName": "C++ Test Explorer",
   "description": "Google Test explorer for CMake and ROS 2 colcon workspaces.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "namo-robotics",
   "license": "MIT",
   "engines": {
@@ -140,6 +140,55 @@
               "timeout": {
                 "type": "number",
                 "minimum": 0
+              },
+              "testGrouping": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "groupBySourceFolder": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "Group by workspace-relative source folders, then suite."
+                  },
+                  "groupBySuite": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "Group by the original Google Test suite."
+                  },
+                  "groupBySplittedTestName": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "splitBy": {
+                        "type": "string",
+                        "minLength": 1,
+                        "default": ".",
+                        "description": "Literal separator, or a JavaScript regular expression prefixed with a backtick."
+                      }
+                    }
+                  }
+                },
+                "oneOf": [
+                  {
+                    "maxProperties": 0
+                  },
+                  {
+                    "required": [
+                      "groupBySourceFolder"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "groupBySuite"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "groupBySplittedTestName"
+                    ]
+                  }
+                ],
+                "description": "Override the workspace test grouping for this executable. An empty object uses source-folder grouping."
               }
             }
           }
@@ -195,13 +244,6 @@
             "batch"
           ]
         },
-        "cppTestExplorer.batchSize": {
-          "type": "integer",
-          "default": 25,
-          "minimum": 1,
-          "scope": "resource",
-          "description": "Maximum cases per process in batch mode. Batches share the concurrency limit. Long test filters may produce smaller batches."
-        },
         "cppTestExplorer.discoveryTimeout": {
           "type": "number",
           "default": 30,
@@ -242,6 +284,57 @@
               "type": "object"
             }
           }
+        },
+        "cppTestExplorer.testGrouping": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "groupBySourceFolder": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Group by workspace-relative source folders, then suite."
+            },
+            "groupBySuite": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Group by the original Google Test suite."
+            },
+            "groupBySplittedTestName": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "splitBy": {
+                  "type": "string",
+                  "minLength": 1,
+                  "default": ".",
+                  "description": "Literal separator, or a JavaScript regular expression prefixed with a backtick."
+                }
+              }
+            }
+          },
+          "oneOf": [
+            {
+              "maxProperties": 0
+            },
+            {
+              "required": [
+                "groupBySourceFolder"
+              ]
+            },
+            {
+              "required": [
+                "groupBySuite"
+              ]
+            },
+            {
+              "required": [
+                "groupBySplittedTestName"
+              ]
+            }
+          ],
+          "default": {},
+          "scope": "resource",
+          "description": "Choose how tests are grouped below each executable. Select exactly one strategy. An empty object uses source-folder grouping."
         }
       }
     }

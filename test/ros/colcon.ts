@@ -85,7 +85,7 @@ async function main() {
           runExecutable(
             executable,
             executable.cases,
-            settings({ parallelMode: mode, batchSize: 2 }),
+            settings({ parallelMode: mode }),
             scheduler,
             {
               started: () => {},

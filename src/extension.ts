@@ -50,6 +50,8 @@ export class Explorer implements vscode.Disposable {
   private debugScheduler = new Scheduler(1);
   private refreshPromise: Promise<void> = Promise.resolve();
   private refreshAbort?: AbortController;
+  private refreshPending = false;
+  private discoveredConfiguration?: string;
   private timer?: NodeJS.Timeout;
   private disposed = false;
   private active = new Set<AbortController>();
@@ -60,7 +62,7 @@ export class Explorer implements vscode.Disposable {
   constructor() {
     this.controller.refreshHandler = (token) => this.refresh(token);
     this.controller.resolveHandler = (item) => {
-      if (!item) {
+      if (!item && !this.hasCurrentDiscovery()) {
         return this.refresh();
       }
     };
@@ -120,8 +122,17 @@ export class Explorer implements vscode.Disposable {
   /** Combine nearby workspace changes into a single refresh. */
   private scheduleRefresh() {
     clearTimeout(this.timer);
+    if (this.active.size) {
+      this.refreshPending = true;
+      return;
+    }
     this.timer = setTimeout(() => {
-      void this.refresh();
+      this.timer = undefined;
+      if (this.active.size) {
+        this.refreshPending = true;
+      } else {
+        void this.refresh();
+      }
     }, 500);
   }
   /** Replace discovery data while reusing stable test items. */
@@ -141,7 +152,10 @@ export class Explorer implements vscode.Disposable {
         await this.refreshWorkspaces(abort.signal);
       })
       .catch((e) => this.output.appendLine(`Discovery error: ${String(e)}`))
-      .finally(() => subscription?.dispose());
+      .finally(() => {
+        subscription?.dispose();
+        if (this.refreshAbort === abort) this.refreshAbort = undefined;
+      });
     return this.refreshPromise;
   }
   /** Discover workspace folders and apply results after checking cancellation. */
@@ -193,6 +207,8 @@ export class Explorer implements vscode.Disposable {
     }
     this.controller.items.replace(roots);
     this.watch(watches);
+    this.discoveredConfiguration =
+      configurations.size === folders.length ? this.configurationKey(configurations) : undefined;
   }
 
   /** Represent invalid settings and discovery failures as workspace diagnostics. */
@@ -239,6 +255,30 @@ export class Explorer implements vscode.Disposable {
       }
     }
   }
+  /** Identify the workspace settings used to produce a discovery snapshot. */
+  private configurationKey(configurations: Map<vscode.WorkspaceFolder, Settings>): string {
+    return JSON.stringify(
+      [...configurations].map(([folder, settings]) => [
+        folder.uri.toString(),
+        folder.name,
+        settings,
+      ]),
+    );
+  }
+
+  /** Reuse discovered tests only while their workspace settings remain unchanged. */
+  private hasCurrentDiscovery(): boolean {
+    if (this.discoveredConfiguration === undefined) return false;
+    try {
+      const configurations = new Map(
+        (vscode.workspace.workspaceFolders ?? []).map((folder) => [folder, settingsFor(folder)]),
+      );
+      return this.configurationKey(configurations) === this.discoveredConfiguration;
+    } catch {
+      return false;
+    }
+  }
+
   /** Let a cancelled run stop waiting for an unrelated discovery refresh. */
   private waitForRefresh(token: vscode.CancellationToken): Promise<boolean> {
     if (token.isCancellationRequested) return Promise.resolve(false);
@@ -266,9 +306,18 @@ export class Explorer implements vscode.Disposable {
       void vscode.window.showErrorMessage('Trust this workspace before running Google Tests.');
       return;
     }
-    const refreshed = await this.waitForRefresh(token);
-    if (!refreshed || token.isCancellationRequested || this.disposed) {
-      return;
+    if (!this.hasCurrentDiscovery()) {
+      if (!this.refreshAbort) void this.refresh();
+      const refreshed = await this.waitForRefresh(token);
+      if (!refreshed) return;
+    }
+    if (token.isCancellationRequested || this.disposed) return;
+    if (this.timer) this.refreshPending = true;
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    if (this.refreshAbort) {
+      this.refreshPending = true;
+      this.refreshAbort.abort();
     }
     const run = this.controller.createTestRun(request);
     const abort = new AbortController();
@@ -328,6 +377,10 @@ export class Explorer implements vscode.Disposable {
       subscriptions.forEach((s) => s.dispose());
       this.active.delete(abort);
       run.end();
+      if (!this.active.size && this.refreshPending && !this.disposed) {
+        this.refreshPending = false;
+        this.scheduleRefresh();
+      }
     }
   }
   /** Group selected cases by binary and connect execution events to VS Code. */
@@ -347,7 +400,7 @@ export class Explorer implements vscode.Disposable {
     await Promise.all(
       [...grouped.values()].map(({ binding, items }) => {
         const byName = new Map(items.map((item) => [bindings.get(item.id)!.test.name, item]));
-        const executableItem = items[0]?.parent?.parent;
+        const executableItem = binding.executableItem;
         return runExecutable(
           binding.executable,
           items.map((item) => bindings.get(item.id)!.test),

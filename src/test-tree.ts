@@ -1,6 +1,7 @@
 /** Build the workspace, executable, suite, and case items shown in Testing. */
 import * as vscode from 'vscode';
 import path from 'node:path';
+import { createTestGrouper } from './test-grouping';
 import { stableId } from './discovery';
 import type { Discovery, Executable, Settings, TestCase } from './types';
 
@@ -10,6 +11,7 @@ export interface Binding {
   test: TestCase;
   folder: vscode.WorkspaceFolder;
   settings: Settings;
+  executableItem: vscode.TestItem;
 }
 
 /** Reuse stable test items and track the execution data for each leaf. */
@@ -55,7 +57,7 @@ export class TestTree {
     return root;
   }
 
-  /** Reuse a binary's suites and attach current run data to each test case. */
+  /** Rebuild the chosen hierarchy and attach current run data to each test case. */
   private updateExecutable(
     group: vscode.TestItem,
     executable: Executable,
@@ -72,31 +74,53 @@ export class TestTree {
     item.description = executable.package
       ? path.relative(folder.uri.fsPath, executable.path)
       : executable.cwd;
-    const suites = new Map<string, vscode.TestItem>();
-    const suiteChildren = new Map<string, vscode.TestItem[]>();
+    const previous = this.collectItems(item);
+    const grouping = executable.testGrouping ?? settings.testGrouping;
+    const placeTest = createTestGrouper(folder.uri.fsPath, grouping);
+    const groups = new Map<string, vscode.TestItem>();
+    const children = new Map<vscode.TestItem, vscode.TestItem[]>([[item, []]]);
     for (const test of executable.cases) {
-      const suiteId = stableId(executable.id, test.suite);
-      const suite =
-        suites.get(suiteId) ??
-        item.children.get(suiteId) ??
-        this.controller.createTestItem(suiteId, test.suite);
-      suites.set(suiteId, suite);
+      const placement = placeTest(test);
+      let parent = item;
+      const segments: string[] = [];
+      for (const label of placement.groups) {
+        segments.push(label);
+        const groupId = stableId(executable.id, 'group', grouping, segments);
+        let child = groups.get(groupId);
+        if (!child) {
+          child = previous.get(groupId) ?? this.controller.createTestItem(groupId, label);
+          groups.set(groupId, child);
+          children.set(child, []);
+          children.get(parent)!.push(child);
+        }
+        parent = child;
+      }
       const id = stableId(executable.id, test.name);
       const uri = test.source ? vscode.Uri.file(test.source.file) : undefined;
-      let leaf = suite.children.get(id);
-      if (!leaf || leaf.uri?.toString() !== uri?.toString()) {
-        leaf = this.controller.createTestItem(id, test.label, uri);
+      let leaf = previous.get(id);
+      if (!leaf || leaf.parent?.id !== parent.id || leaf.uri?.toString() !== uri?.toString()) {
+        leaf = this.controller.createTestItem(id, placement.label, uri);
       }
+      leaf.label = placement.label;
       leaf.range = test.source
         ? new vscode.Range(test.source.line, 0, test.source.line, 0)
         : undefined;
       leaf.tags = [this.debugTag];
       leaf.description = test.disabled || executable.disabled ? 'disabled' : undefined;
-      this.bindings.set(id, { executable, test, folder, settings });
-      suiteChildren.set(suiteId, [...(suiteChildren.get(suiteId) ?? []), leaf]);
+      this.bindings.set(id, { executable, test, folder, settings, executableItem: item });
+      children.get(parent)!.push(leaf);
     }
-    suites.forEach((suite, id) => suite.children.replace(suiteChildren.get(id) ?? []));
-    item.children.replace([...suites.values()]);
+    children.forEach((items, parent) => parent.children.replace(items));
     return item;
+  }
+  /** Index existing descendants so refreshes can reuse stable test items. */
+  private collectItems(root: vscode.TestItem): Map<string, vscode.TestItem> {
+    const items = new Map<string, vscode.TestItem>();
+    const visit = (item: vscode.TestItem) => {
+      items.set(item.id, item);
+      item.children.forEach(visit);
+    };
+    root.children.forEach(visit);
+    return items;
   }
 }

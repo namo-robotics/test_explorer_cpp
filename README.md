@@ -8,11 +8,11 @@ Google Test support for VS Code's native Testing view, by **Namo Robotics** (`na
 
 Run `./build-vsix.sh`, then install `cpp-test-explorer-0.1.3.vsix` using **Extensions: Install from VSIX…**. The script installs locked dependencies, compiles and packages the extension. Requires Node 22+ and npm. Optional packaging arguments are forwarded, e.g. `./build-vsix.sh --out /tmp/explorer.vsix`.
 
-Build your C++ project with testing enabled, open its workspace folder, and open VS Code's Testing view. The tree is **Workspace → Package/Project → Executable → Suite → Case**. Run all tests, any group, or a single case using the standard Testing actions.
+Build your C++ project with testing enabled, open its workspace folder, and open VS Code's Testing view. The tree is **Workspace → Package/Project → Executable → Source folders → Suite → Case**. Run all tests, any group, or a single case using the standard Testing actions.
 
 Select a case to debug with **CodeLLDB** (`vadimcn.vscode-lldb`) or **C++ / GDB** (`ms-vscode.cpptools`). Install the debugger in the remote environment when using Remote SSH, WSL or a container. GDB must also be installed for cpptools. VS Code remembers your chosen default debug profile.
 
-Use **C++ Test Explorer: Refresh Tests** after building if needed. Binaries, discovered metadata, package manifests and setup scripts are watched automatically. **C++ Test Explorer: Show Discovery Output** explains discovery problems. Test stdout/stderr appear in Testing output; debugger output uses its Debug Console or terminal. Test cases with source metadata support **Go to Test** navigation and native source gutter actions. Locations come from the built binary, so rebuild and refresh after moving a test definition. Navigation is unavailable when the binary omits source metadata or the reported file cannot be found locally.
+Runs reuse the last completed discovery when workspace settings are unchanged, and automatic refreshes wait until active runs finish. Use **C++ Test Explorer: Refresh Tests** after building if needed. Binaries, discovered metadata, package manifests and setup scripts are watched automatically. **C++ Test Explorer: Show Discovery Output** explains discovery problems. Test stdout/stderr appear in Testing output; debugger output uses its Debug Console or terminal. Test cases with source metadata support **Go to Test** navigation and native source gutter actions. Locations come from the built binary, so rebuild and refresh after moving a test definition. Navigation is unavailable when the binary omits source metadata or the reported file cannot be found locally.
 
 ## ROS 2
 
@@ -65,7 +65,6 @@ Set both `buildDirectories` and `sourceRoots` to `[]` for manual-only discovery.
 | ----------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `concurrency`                       | `0`                       | Auto: number of available CPU cores. Positive values set a shared process limit. The smallest resolved limit applies in multi-root workspaces. |
 | `parallelMode`                      | `"case"`                  | One process per case; `"executable"` parallelizes binaries; `"batch"` groups cases into processes.                                             |
-| `batchSize`                         | `25`                      | Maximum cases per process in `"batch"` mode. Must be a positive integer.                                                                       |
 | `discoveryTimeout`                  | `30`                      | Seconds for discovery and sourcing setup files.                                                                                                |
 | `timeout`                           | `null`                    | Registered timeout or 60 seconds. `0` disables it. Explicit executable timeout takes precedence.                                               |
 | `runDisabled`                       | `false`                   | Show disabled cases but skip ordinary runs; enable to run them. Explicit debugging enables disabled tests.                                     |
@@ -135,16 +134,35 @@ Run `npm run format` to format supported source, test, configuration, and docume
 
 ## Batched execution
 
-For many short tests in one binary, use batch mode to share process startup across several cases:
+Use round-robin batching to distribute one binary's selected tests across the shared process limit:
 
 ```json
 {
   "cppTestExplorer.parallelMode": "batch",
-  "cppTestExplorer.batchSize": 25,
   "cppTestExplorer.concurrency": 8
 }
 ```
 
-A selection of 1,000 runnable cases normally produces 40 processes, with up to 8 running concurrently. Each process runs its cases sequentially; the next queued batch starts when a slot becomes free. Smaller batches balance uneven test durations, while larger batches reduce startup overhead. Very long test names can cause smaller batches to keep command lines manageable.
+For 1,000 runnable cases and concurrency 8, the extension normally launches 8 processes with 125 tests each. Cases are assigned in round-robin order: the first case goes to the first group, the second to the second group, and so on. Each executable is split separately, while the concurrency limit is shared across all executables and requests. Very long test filters may require additional processes to stay within command-line limits.
 
-Disabled cases are skipped unless enabled. Results and output remain associated with individual cases. The configured timeout applies to the entire batch process, so allow enough time for all its cases. Stop cancels queued batches and terminates active batch processes. Debugging still runs one selected case. The default mode remains `"case"`; `batchSize` only affects `"batch"` mode.
+There is no batch-size setting. Disabled cases are skipped before grouping unless enabled. Results and output remain associated with individual cases. The timeout applies to each whole batch process. Stop cancels queued batches and terminates active batch processes. Debugging still runs one selected case. The default execution mode remains `"case"`.
+
+## Test grouping
+
+Tests default to workspace-relative **source folders → suite → case** below each executable. A test defined in `tests/functions/generic/test_constraints.cpp` appears under `tests → functions → generic`, followed by its suite and case. Files outside the workspace appear under **External sources**; tests without source locations appear under **Unknown source**. Grouping does not change test selection, source navigation, or debugger filters.
+
+To split suite names into a custom hierarchy while preserving snake-case case names:
+
+```json
+{
+  "cppTestExplorer.testGrouping": {
+    "groupBySplittedTestName": {
+      "splitBy": "`(?<!\\.[^.]*)_(?=[A-Z])|\\."
+    }
+  }
+}
+```
+
+This displays `Functions_Generic_Constraints.numeric_accepts_integer` as **Functions → Generic → Constraints → numeric_accepts_integer**. `splitBy` is a literal separator unless it starts with a backtick, which makes the remainder a JavaScript regular expression. Its default is `"."`.
+
+Use `"cppTestExplorer.testGrouping": { "groupBySuite": {} }` for the original suite grouping, or `{}` for the default source-folder grouping. Select only one strategy. Explicit entries in `cppTestExplorer.executables` can override the workspace strategy with their own `testGrouping` object using the same format.

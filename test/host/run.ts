@@ -32,7 +32,6 @@ async function main() {
       JSON.stringify({
         'cppTestExplorer.autoSourceWorkspace': false,
         'cppTestExplorer.parallelMode': 'batch',
-        'cppTestExplorer.batchSize': 2,
         'extensions.autoUpdate': false,
         'extensions.autoCheckUpdates': false,
         'cppTestExplorer.debug': {

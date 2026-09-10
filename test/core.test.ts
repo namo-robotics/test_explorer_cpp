@@ -226,26 +226,31 @@ test('selection deduplicates and honors ancestor exclusions for direct leaf requ
   );
 });
 
-test('batch mode partitions a large selection without dropping or repeating cases', () => {
+test('batch mode distributes a large selection round-robin across process slots', () => {
   const cases = Array.from({ length: 1000 }, (_, index) => ({
     name: `Suite.Case${index}`,
     suite: 'Suite',
     label: `Case${index}`,
     disabled: false,
   }));
-  const grouped = batches(cases, 'batch', 25);
-  assert.equal(grouped.length, 40);
-  assert(grouped.every((batch) => batch.length === 25));
-  assert.deepEqual(grouped.flat(), cases);
+  const grouped = batches(cases, 'batch', 8);
+  assert.equal(grouped.length, 8);
+  for (let slot = 0; slot < grouped.length; slot++) {
+    assert.deepEqual(
+      grouped[slot],
+      cases.filter((_, index) => index % 8 === slot),
+    );
+  }
+  assert.equal(new Set(grouped.flat()).size, cases.length);
   assert.deepEqual(
-    batches(cases.slice(0, 26), 'batch', 25).map((batch) => batch.length),
-    [25, 1],
+    batches(cases.slice(0, 10), 'batch', 3).map((group) => group.length),
+    [4, 3, 3],
   );
-  assert.deepEqual(batches([], 'batch', 25), []);
-  assert.equal(batches(cases, 'batch', 1).length, cases.length);
-  assert.equal(batches(cases, 'batch', 2000).length, 1);
-  assert.equal(batches(cases, 'executable', 1).length, 1);
-  assert.equal(batches(cases, 'case', 25).length, cases.length);
+  assert.deepEqual(batches([], 'batch', 8), []);
+  assert.equal(batches(cases, 'batch', 1).length, 1);
+  assert.equal(batches(cases, 'batch', 2000).length, cases.length);
+  assert.equal(batches(cases, 'executable', 8).length, 1);
+  assert.equal(batches(cases, 'case', 8).length, cases.length);
   for (const invalid of [0, -1, 1.5, NaN, Infinity]) {
     assert.throws(() => batches(cases, 'batch', invalid), /positive integer/);
   }
@@ -258,7 +263,7 @@ test('batch mode retains the command-length limit', () => {
     label: String(index),
     disabled: false,
   }));
-  const grouped = batches(cases, 'batch', 25);
+  const grouped = batches(cases, 'batch', 1);
   assert.deepEqual(
     grouped.map((batch) => batch.length),
     [1, 1, 1],

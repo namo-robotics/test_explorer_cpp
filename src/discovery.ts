@@ -443,6 +443,7 @@ class DiscoverySession {
           env: { ...(inherited?.env ?? env), ...settings.env, ...entry.env },
           timeout: entry.timeout ?? settings.timeout ?? inherited?.timeout ?? 60,
           disabled: inherited?.disabled ?? false,
+          testGrouping: entry.testGrouping,
           cases: [],
         };
         manual.push(explicit);
