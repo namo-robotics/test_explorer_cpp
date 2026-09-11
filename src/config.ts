@@ -1,7 +1,7 @@
 /** Read and validate settings for an individual VS Code workspace folder. */
 import * as vscode from 'vscode';
 import os from 'node:os';
-import { validateTestGrouping } from './test-grouping';
+import { validateTestGrouping, validateTestGroupByMode } from './test-grouping';
 import type { Settings } from './types';
 
 /** Read settings and reject invalid values before starting processes. */
@@ -20,6 +20,7 @@ export function settingsFor(folder: vscode.WorkspaceFolder): Settings {
     env: config.get('env', {}),
     concurrency: config.get('concurrency', 0),
     parallelMode: config.get('parallelMode', 'case'),
+    testGroupByMode: config.get('testGroupByMode', 'executable'),
     testGrouping: config.get('testGrouping', {}),
     discoveryTimeout: config.get('discoveryTimeout', 30),
     timeout: config.get('timeout', null),
@@ -32,6 +33,7 @@ export function settingsFor(folder: vscode.WorkspaceFolder): Settings {
 
 /** Reject invalid configuration values and resolve automatic concurrency. */
 function validateSettings(settings: Settings): void {
+  validateTestGroupByMode(settings.testGroupByMode);
   validateTestGrouping(settings.testGrouping);
   if (!Number.isInteger(settings.concurrency) || settings.concurrency < 0) {
     throw new Error('concurrency must be a nonnegative integer');
@@ -65,6 +67,7 @@ function validateSettings(settings: Settings): void {
     ) {
       throw new Error('Invalid explicit executable configuration');
     }
+    if (entry.testGroupByMode !== undefined) validateTestGroupByMode(entry.testGroupByMode);
     if (entry.testGrouping !== undefined) validateTestGrouping(entry.testGrouping);
   }
 }

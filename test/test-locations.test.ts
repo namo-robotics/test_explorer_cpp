@@ -37,7 +37,10 @@ test('missing metadata and ambiguous paths retain runnable cases without navigat
     await fs.mkdir(first);
     await fs.mkdir(second);
     const file = path.join(first, 'tests.cpp');
-    await fs.writeFile(file, '// Test source\n');
+    await fs.writeFile(
+      file,
+      'namespace delta_control { namespace testing { TEST(Basic, Pass) {} } }\n',
+    );
     const xmlFile = path.join(root, 'listing.xml');
     const cases = parseList('Basic.\n  Pass\n');
     const original = structuredClone(cases);
@@ -54,6 +57,7 @@ test('missing metadata and ambiguous paths retain runnable cases without navigat
     );
     await attachSourceLocations(cases, xmlFile, [first, first, second]);
     assert.deepEqual(cases[0].source, { file, line: 0 });
+    assert.deepEqual(cases[0].namespaces, ['delta_control', 'testing']);
 
     await fs.writeFile(path.join(second, 'tests.cpp'), '// Another test source\n');
     const ambiguous = structuredClone(original);

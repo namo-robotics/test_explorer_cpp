@@ -1,4 +1,5 @@
 /** Read source locations reported by Google Test without running test bodies. */
+import { namespacesByLine } from './namespaces';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
@@ -78,6 +79,7 @@ export async function attachSourceLocations(
     // Older Google Test binaries may only support the plain-text listing.
     return;
   }
+  const namespaces = new Map<string, string[][]>();
   const resolved = new Map<string, string | undefined>();
   for (const test of cases) {
     const location = locations.get(test.name);
@@ -89,6 +91,16 @@ export async function attachSourceLocations(
       );
     }
     const file = resolved.get(location.file);
-    if (file) test.source = { file, line: location.line };
+    if (file) {
+      test.source = { file, line: location.line };
+      if (!namespaces.has(file)) {
+        try {
+          namespaces.set(file, namespacesByLine(await fs.readFile(file, 'utf8')));
+        } catch {
+          // A source file may disappear during discovery.
+        }
+      }
+      test.namespaces = namespaces.get(file)?.[location.line];
+    }
   }
 }

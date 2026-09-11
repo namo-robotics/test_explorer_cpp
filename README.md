@@ -138,7 +138,8 @@ resolved against the workspace folder and accept `${workspaceFolder}`.
 | Setting (`cppTestExplorer.` prefix) | Default                   | Description                                                                                                                                                                                                                                                                                                                                                                           |
 | ----------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `debug`                             | `{"lldb":{},"cppdbg":{}}` | Extra launch configuration properties merged into the debug session for each debugger adapter. Use `lldb` for CodeLLDB and `cppdbg` for the Microsoft C++ extension. Typical overrides are `miDebuggerPath`, `sourceFileMap`, `sourceMap` or `terminal`. The program, arguments, working directory, environment and build task are managed by the extension and cannot be overridden. |
-| `testGrouping`                      | `{}`                      | How tests are arranged in the tree below each executable. Choose exactly one strategy: `{}` or `groupBySourceFolder` groups by the source folder of each test file, then suite; `groupBySuite` groups by Google Test suite only; `groupBySplittedTestName` splits suite names on a separator or regular expression given by `splitBy`. See [Test grouping](#test-grouping).           |
+| `testGrouping`                      | `{}`                      | Optional sub-grouping: suite (default), `groupBySourceFolder`, or `groupBySplittedTestName` with a literal or regex `splitBy`. See [Test grouping](#test-grouping).                                                                                                                                                                                                                   |
+| `testGroupByMode`                   | `executable` (default)    | Top-level grouping: `namespace`, `executable`, or `name`.                                                                                                                                                                                                                                                                                                                             |
 
 ### ROS 2
 
@@ -263,11 +264,22 @@ case. The default execution mode remains `"case"`.
 
 ## Test grouping
 
-Tests default to workspace-relative **source folders → suite → case** below each executable. A test
-defined in `tests/functions/generic/test_constraints.cpp` appears under
-`tests → functions → generic`, followed by its suite and case. Files outside the workspace appear
-under **External sources**; tests without source locations appear under **Unknown source**. Grouping
-does not change test selection, source navigation, or debugger filters.
+`cppTestExplorer.testGroupByMode` selects the hierarchy below the workspace:
+
+| Mode                   | Hierarchy                                                |
+| ---------------------- | -------------------------------------------------------- |
+| `namespace`            | C++ namespace → nested namespace → suite → case          |
+| `executable` (default) | CMake project or ROS package → executable → suite → case |
+| `name`                 | CMake project or ROS package → split test name           |
+
+In `namespace` mode, tests declared inside `namespace delta_control { namespace testing { ... } }`
+appear under **delta_control → testing**. Namespaces are read from each test definition's source
+location. Global-scope tests appear under **Global namespace**; unavailable source metadata appears
+under **Unknown namespace**. This is lexical source scanning, so macro-generated namespaces and
+conditional compilation may not be resolved. Grouping preserves execution names and source
+navigation.
+
+All modes support split-name grouping. In `name` mode the default separator is `.`.
 
 To split suite names into a custom hierarchy while preserving snake-case case names:
 
@@ -286,9 +298,10 @@ Constraints → numeric_accepts_integer**. `splitBy` is a literal separator unle
 backtick, which makes the remainder a JavaScript regular expression. Its default is `"."`.
 
 Use `"cppTestExplorer.testGrouping": { "groupBySuite": {} }` for the original suite grouping, or
-`{}` for the default source-folder grouping. Select only one strategy. Explicit entries in
-`cppTestExplorer.executables` can override the workspace strategy with their own `testGrouping`
-object using the same format.
+`{}` for the default suite grouping. Use `{ "groupBySourceFolder": {} }` for source folders. Select
+only one strategy. Explicit entries in `cppTestExplorer.executables` can override the workspace
+strategy with their own `testGrouping` object using the same format, and can override
+`testGroupByMode`.
 
 ## How it Works
 
@@ -358,8 +371,8 @@ run there too.
    directory and workspace folder; for ROS tests, the package source directory is also checked. A
    location is attached only when it resolves to one existing file. VS Code uses it for **Go to
    Test** and gutter actions. The extension then registers the tests in the native Testing view,
-   grouped by workspace, project, executable and the selected `testGrouping` strategy, and deletes
-   the temporary listing. Tests without usable locations still appear and can run.
+   grouped by the selected `testGroupByMode` and `testGrouping` settings, and deletes the temporary
+   listing. Tests without usable locations still appear and can run.
 
 4. **Run the selected cases.** Selecting a suite or folder expands to its individual test cases;
    excluded selections are removed. Disabled cases are reported as skipped unless

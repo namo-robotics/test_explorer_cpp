@@ -2,7 +2,9 @@
 import type { Relocation } from './relocation';
 /** Environment variables passed to a child process. */
 export type Environment = Record<string, string>;
-/** The display hierarchy used below each test executable. */
+/** The top-level hierarchy used to display tests. */
+export type TestGroupByMode = 'namespace' | 'executable' | 'name';
+/** Optional grouping beneath the selected hierarchy. */
 export type TestGrouping =
   | { groupBySourceFolder?: Record<string, never> }
   | { groupBySuite: Record<string, never> }
@@ -17,6 +19,7 @@ export interface ManualExecutable {
   cwd?: string;
   env?: Environment;
   timeout?: number;
+  testGroupByMode?: TestGroupByMode;
   testGrouping?: TestGrouping;
 }
 /** Resolved settings for one workspace folder. */
@@ -33,6 +36,7 @@ export interface Settings {
   env: Environment;
   concurrency: number;
   parallelMode: 'executable' | 'case' | 'batch';
+  testGroupByMode: TestGroupByMode;
   testGrouping: TestGrouping;
   discoveryTimeout: number;
   timeout: number | null;
@@ -51,6 +55,8 @@ export interface TestCase {
   label: string;
   disabled: boolean;
   source?: SourceLocation;
+  /** Enclosing C++ namespaces, or undefined when source is unavailable. */
+  namespaces?: string[];
 }
 /** A test program together with its execution environment and cases. */
 export interface Executable {
@@ -65,6 +71,7 @@ export interface Executable {
   timeout: number;
   disabled: boolean;
   cases: TestCase[];
+  testGroupByMode?: TestGroupByMode;
   testGrouping?: TestGrouping;
   registrations?: { filter: string; disabled: boolean }[];
   /** Workspace move detected from the build tree's CMake cache, if any. */

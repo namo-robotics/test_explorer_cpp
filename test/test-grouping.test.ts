@@ -15,7 +15,7 @@ const example: TestCase = {
 };
 
 test('source grouping follows workspace-relative directories and retains suites', () => {
-  const group = createTestGrouper(root, {});
+  const group = createTestGrouper(root, { groupBySourceFolder: {} });
   assert.deepEqual(group(example), {
     groups: ['tests', 'functions', 'generic', example.suite],
     label: example.label,
@@ -86,4 +86,11 @@ test('grouping rejects conflicting strategies and invalid patterns', () => {
   validateTestGrouping({});
   validateTestGrouping({ groupBySourceFolder: {} });
   validateTestGrouping({ groupBySuite: {} });
+});
+
+test('empty grouping defaults to suites', () => {
+  assert.deepEqual(createTestGrouper(root, {})(example), {
+    groups: [example.suite],
+    label: example.label,
+  });
 });

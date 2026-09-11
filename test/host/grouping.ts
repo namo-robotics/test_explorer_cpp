@@ -52,7 +52,10 @@ export function verifyGrouping(): void {
       cases,
     };
     const discovery = { executables: [executable], diagnostics: [], notes: [], watchPaths: [] };
-    const configuration = settings();
+    const configuration = settings({
+      testGroupByMode: 'executable',
+      testGrouping: { groupBySourceFolder: {} },
+    });
     const root = tree.updateFolder(folder, configuration, discovery);
     controller.items.replace([root]);
     const original = descend(root, [
@@ -82,11 +85,38 @@ export function verifyGrouping(): void {
     );
     assert.equal(selected.length, 2);
     assert(selected.includes(leaf));
-    assert.equal(tree.bindings.get(leaf.id)?.executableItem.id, executable.id);
+    assert.equal(tree.bindings.get(leaf.id)?.executableItem.label, 'tests_binary');
     assert.equal(tree.bindings.get(leaf.id)?.test.name, cases[0].name);
     tree.bindings.clear();
     tree.updateFolder(folder, configuration, discovery);
     assert.equal(descend(group, [cases[0].label]), leaf, 'Unchanged refresh reuses leaf objects');
+    executable.testGrouping = undefined;
+    configuration.testGrouping = {};
+    configuration.testGroupByMode = 'namespace';
+    cases.forEach((test) => {
+      test.namespaces = ['delta_control', 'testing'];
+    });
+    discovery.executables.push({ ...executable, id: 'second-executable' });
+    tree.updateFolder(folder, configuration, discovery);
+    const namespace = descend(root, ['delta_control', 'testing', cases[0].suite]);
+    assert.equal(namespace.children.size, cases.length * 2);
+    assert.equal(tree.bindings.size, cases.length * 2);
+    assert(namespace.children.get(id), 'Mode changes preserve execution IDs');
+    configuration.testGroupByMode = 'name';
+    configuration.testGrouping = { groupBySplittedTestName: { splitBy: '`_|\\.' } };
+    tree.updateFolder(folder, configuration, discovery);
+    descend(root, [
+      'Project',
+      'Functions',
+      'Generic',
+      'Constraints',
+      'numeric',
+      'accepts',
+      'integer',
+    ]);
+    discovery.executables.pop();
+    tree.updateFolder(folder, configuration, discovery);
+    assert.equal(tree.bindings.size, cases.length);
   } finally {
     controller.dispose();
   }

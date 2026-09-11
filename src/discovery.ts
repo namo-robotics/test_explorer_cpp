@@ -487,7 +487,7 @@ class DiscoverySession {
           overridden.add(inherited.id);
         }
         pkg ??= inherited?.package;
-        const group = entry.group ?? pkg ?? 'Manual';
+        const group = entry.group ?? pkg ?? inherited?.group ?? 'Manual';
         const explicit: Executable = {
           id: stableId(root, 'manual', entry.id),
           workspace: root,
@@ -499,6 +499,7 @@ class DiscoverySession {
           env: { ...(inherited?.env ?? env), ...settings.env, ...entry.env },
           timeout: entry.timeout ?? settings.timeout ?? inherited?.timeout ?? 60,
           disabled: inherited?.disabled ?? false,
+          testGroupByMode: entry.testGroupByMode,
           testGrouping: entry.testGrouping,
           cases: [],
         };
@@ -638,6 +639,9 @@ class DiscoverySession {
       }
       if (!candidate.cases.length) {
         return undefined;
+      }
+      for (const test of candidate.cases) {
+        if (test.source) watchPaths.add(test.source.file);
       }
       return candidate;
     } catch (e) {

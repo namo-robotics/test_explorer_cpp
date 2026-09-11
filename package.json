@@ -2,7 +2,7 @@
   "name": "cpp-test-explorer",
   "displayName": "C++ Test Explorer",
   "description": "Google Test explorer for CMake and ROS 2 colcon workspaces.",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "publisher": "namo-robotics",
   "license": "MIT",
   "engines": {
@@ -189,6 +189,16 @@
                   }
                 ],
                 "description": "Override the workspace test grouping for this executable. An empty object uses source-folder grouping."
+              },
+              "testGroupByMode": {
+                "type": "string",
+                "enum": [
+                  "namespace",
+                  "executable",
+                  "name"
+                ],
+                "default": "executable",
+                "description": "Group by C++ namespace, project/executable, or project/split test name."
               }
             }
           }
@@ -335,6 +345,17 @@
           "default": {},
           "scope": "resource",
           "description": "Choose how tests are grouped below each executable. Select exactly one strategy. An empty object uses source-folder grouping."
+        },
+        "cppTestExplorer.testGroupByMode": {
+          "type": "string",
+          "enum": [
+            "namespace",
+            "executable",
+            "name"
+          ],
+          "default": "executable",
+          "description": "Group by C++ namespace, project/executable, or project/split test name.",
+          "scope": "resource"
         }
       }
     }

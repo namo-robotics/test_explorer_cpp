@@ -1,11 +1,18 @@
 /** Choose display groups without changing the Google Test names used for execution. */
 import path from 'node:path';
-import type { TestCase, TestGrouping } from './types';
+import type { TestCase, TestGrouping, TestGroupByMode } from './types';
 
 /** Display groups and the leaf label for one test case. */
 export interface GroupedTest {
   groups: string[];
   label: string;
+}
+
+/** Reject unsupported top-level grouping modes. */
+export function validateTestGroupByMode(value: unknown): asserts value is TestGroupByMode {
+  if (!['namespace', 'executable', 'name'].includes(value as string)) {
+    throw new Error('testGroupByMode must be namespace, executable or name');
+  }
 }
 
 /** Check grouping settings and reject invalid regular expressions before discovery. */
@@ -62,7 +69,7 @@ export function createTestGrouper(
       return { groups: parts.slice(0, -1), label: parts.at(-1) ?? test.name };
     };
   }
-  if ('groupBySuite' in grouping) {
+  if (!('groupBySourceFolder' in grouping)) {
     return (test) => ({ groups: [test.suite], label: test.label });
   }
   return (test) => {

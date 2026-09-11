@@ -20,6 +20,7 @@ export async function run() {
   verifyGrouping();
   const configured = settingsFor(vscode.workspace.workspaceFolders![0]);
   assert.equal(configured.parallelMode, 'batch');
+  assert.equal(configured.testGroupByMode, 'executable');
   assert.equal(configured.concurrency, os.availableParallelism());
   const explorer = await extension.activate();
   await explorer.refresh();
@@ -28,11 +29,11 @@ export async function run() {
   assert.equal(roots[0].error, undefined);
   const groups = children(roots[0].children);
   assert.equal(groups.length, 1);
-  const binaries = children(groups[0].children);
-  assert.equal(binaries.length, 1);
+  assert.equal(groups[0].label, 'explorer_fixture');
+  assert.equal(children(groups[0].children)[0].label, 'example_tests');
   const descendants = (item: vscode.TestItem): vscode.TestItem[] =>
     children(item.children).flatMap((child) => [child, ...descendants(child)]);
-  const suites = descendants(binaries[0]);
+  const suites = descendants(roots[0]);
   const basic = suites.find((suite) => suite.label === 'Basic')!;
   assert(basic);
   const pass = children(basic.children).find((test) => test.label === 'Pass')!;
