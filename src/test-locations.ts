@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import type { SourceLocation, TestCase } from './types';
+import { relocate, type Relocation } from './relocation';
 
 /** XML fields that identify a test definition. */
 interface ListedCase {
@@ -68,6 +69,7 @@ export async function attachSourceLocations(
   cases: TestCase[],
   xmlFile: string,
   directories: string[],
+  relocation?: Relocation,
 ): Promise<void> {
   let locations: Map<string, SourceLocation>;
   try {
@@ -81,7 +83,10 @@ export async function attachSourceLocations(
     const location = locations.get(test.name);
     if (!location) continue;
     if (!resolved.has(location.file)) {
-      resolved.set(location.file, await resolveSourceFile(location.file, directories));
+      resolved.set(
+        location.file,
+        await resolveSourceFile(relocate(location.file, relocation), directories),
+      );
     }
     const file = resolved.get(location.file);
     if (file) test.source = { file, line: location.line };

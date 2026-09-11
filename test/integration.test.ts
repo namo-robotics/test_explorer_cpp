@@ -390,6 +390,33 @@ test('a registered executable that is not built yet is noted, watched and skippe
   assert(discovery.watchPaths.includes(missing));
 });
 
+test('a build tree copied to another workspace relocates registered paths', async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'cpp explorer moved '));
+  await fs.cp(path.join(root, 'build'), path.join(workspace, 'build'), { recursive: true });
+  try {
+    const discovery = await discover(
+      workspace,
+      settings({ sourceRoots: [], buildDirectories: ['build'] }),
+      new Scheduler(1),
+    );
+    assert.deepEqual(discovery.diagnostics, []);
+    assert.equal(discovery.notes.length, 1);
+    assert.match(discovery.notes[0], /relocated to/);
+    assert.equal(discovery.executables.length, 1);
+    const moved = discovery.executables[0];
+    assert.equal(moved.path, path.join(workspace, 'build/example_tests'));
+    assert(moved.cwd.startsWith(workspace), moved.cwd);
+    assert.deepEqual(moved.relocation, { from: root, to: workspace });
+    assert.deepEqual(
+      moved.cases.map((c) => c.name).sort(),
+      executable.cases.map((c) => c.name).sort(),
+    );
+    assert(discovery.watchPaths.includes(moved.path));
+  } finally {
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test('an executable path that exists but is not a regular file is reported as a diagnostic', async () => {
   const directory = path.join(root, 'build');
   const discovery = await discover(

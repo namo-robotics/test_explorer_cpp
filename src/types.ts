@@ -1,4 +1,5 @@
 /** Shared configuration, discovery and result data used by the extension. */
+import type { Relocation } from './relocation';
 /** Environment variables passed to a child process. */
 export type Environment = Record<string, string>;
 /** The display hierarchy used below each test executable. */
@@ -66,6 +67,8 @@ export interface Executable {
   cases: TestCase[];
   testGrouping?: TestGrouping;
   registrations?: { filter: string; disabled: boolean }[];
+  /** Workspace move detected from the build tree's CMake cache, if any. */
+  relocation?: Relocation;
 }
 /** Discovered programs, diagnostics, informational notes and files to watch for changes. */
 export interface Discovery {

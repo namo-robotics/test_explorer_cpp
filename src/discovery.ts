@@ -1,6 +1,7 @@
 /** Find ROS packages and normalize existing Google Test registrations. */
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { buildRelocation, relocate, type Relocation } from './relocation';
 import path from 'node:path';
 import os from 'node:os';
 import { attachSourceLocations } from './test-locations';
@@ -133,11 +134,18 @@ export function fromCTest(
   env: Environment,
   settings: Settings,
   pkg?: string,
+  relocation?: Relocation,
 ): Executable | undefined {
   const properties = Object.fromEntries((entry.properties ?? []).map((p) => [p.name, p.value]));
+  const move = (value: string) => relocate(value, relocation);
   const list = (value: unknown): string[] =>
-    Array.isArray(value) ? value.map(String) : typeof value === 'string' ? value.split(';') : [];
-  let command = [...(entry.command ?? [])];
+    (Array.isArray(value)
+      ? value.map(String)
+      : typeof value === 'string'
+        ? value.split(';')
+        : []
+    ).map(move);
+  let command = (entry.command ?? []).map(move);
   const labels = list(properties.LABELS);
   const isAment = command.some((arg) => /(?:^|\/)ament_cmake_test\/.*run_test\.py$/.test(arg));
   const markedGtest = labels.includes('gtest');
@@ -190,7 +198,7 @@ export function fromCTest(
     );
   }
   const cwd = properties.WORKING_DIRECTORY
-    ? path.resolve(build, properties.WORKING_DIRECTORY)
+    ? path.resolve(build, move(String(properties.WORKING_DIRECTORY)))
     : build;
   const program = path.resolve(build, command[0]);
   let testEnv = applyEnvironment(
@@ -221,6 +229,7 @@ export function fromCTest(
     disabled,
     cases: [],
     registrations,
+    relocation,
   };
 }
 
@@ -244,6 +253,21 @@ async function inspectFile(
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
     return code === 'ENOENT' ? { state: 'missing' } : { state: 'error', detail: String(e) };
+  }
+}
+
+/** Detect a build tree whose CMake cache records a different location than its current path. */
+async function detectRelocation(build: string): Promise<Relocation | undefined> {
+  try {
+    const cache = await fs.readFile(path.join(build, 'CMakeCache.txt'), 'utf8');
+    const configured = /^CMAKE_CACHEFILE_DIR:INTERNAL=(.+)$/m.exec(cache)?.[1]?.trim();
+    if (!configured) {
+      return undefined;
+    }
+    const actual = await fs.realpath(build).catch(() => build);
+    return buildRelocation(configured, actual);
+  } catch {
+    return undefined;
   }
 }
 
@@ -328,7 +352,8 @@ class DiscoverySession {
       if (projectName) {
         projectNames.set(build, projectName);
       }
-      const source = /^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$/m.exec(cache)?.[1]?.trim();
+      const recorded = /^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$/m.exec(cache)?.[1]?.trim();
+      const source = recorded && relocate(recorded, await detectRelocation(build));
       if (
         source &&
         (excluded(root, source, settings.exclude) ||
@@ -347,7 +372,8 @@ class DiscoverySession {
   private async collectCTestCandidates(
     builds: Map<string, { group: string; pkg?: string }>,
   ): Promise<void> {
-    const { root, settings, scheduler, signal, env, candidates, diagnostics, watchPaths } = this;
+    const { root, settings, scheduler, signal, env, candidates, diagnostics, notes, watchPaths } =
+      this;
     for (const [build, info] of builds) {
       if (signal?.aborted) {
         throw new Error('Cancelled');
@@ -359,6 +385,12 @@ class DiscoverySession {
       }
       if (!existsSync(path.join(build, 'CTestTestfile.cmake'))) {
         continue;
+      }
+      const relocation = await detectRelocation(build);
+      if (relocation) {
+        notes.push(
+          `${build}: configured under ${relocation.from}; registered paths are relocated to ${relocation.to}`,
+        );
       }
       try {
         const result = await scheduler.schedule(
@@ -386,11 +418,20 @@ class DiscoverySession {
           throw new Error('Invalid CTest JSON response');
         }
         for (const file of data.backtraceGraph?.files ?? []) {
-          watchPaths.add(path.resolve(build, file));
+          watchPaths.add(path.resolve(build, relocate(String(file), relocation)));
         }
         for (const test of data.tests as CTestEntry[]) {
           try {
-            const executable = fromCTest(test, root, build, info.group, env, settings, info.pkg);
+            const executable = fromCTest(
+              test,
+              root,
+              build,
+              info.group,
+              env,
+              settings,
+              info.pkg,
+              relocation,
+            );
             if (executable) {
               candidates.push(executable);
             }
@@ -553,12 +594,17 @@ class DiscoverySession {
       const packageSource = this.scan.packages.find(
         (pkg) => pkg.name === candidate.package,
       )?.source;
-      await attachSourceLocations(candidate.cases, listingFile, [
-        candidate.cwd,
-        path.dirname(candidate.path),
-        this.root,
-        ...(packageSource ? [packageSource] : []),
-      ]);
+      await attachSourceLocations(
+        candidate.cases,
+        listingFile,
+        [
+          candidate.cwd,
+          path.dirname(candidate.path),
+          this.root,
+          ...(packageSource ? [packageSource] : []),
+        ],
+        candidate.relocation,
+      );
       return result;
     } finally {
       await fs.rm(directory, { recursive: true, force: true });

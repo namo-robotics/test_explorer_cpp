@@ -17,6 +17,7 @@ import { Scheduler } from '../src/process';
 import { selectLeaves } from '../src/selection';
 import { batches } from '../src/runner';
 import { settings } from './helpers';
+import { buildRelocation, relocate } from '../src/relocation';
 
 test('typed, value-parameterized and disabled Google Test names are preserved', () => {
   const tests = parseList(
@@ -383,4 +384,31 @@ test('output block scanning preserves owners across fragmented completion marker
     router.end();
     assert.deepEqual(output, expected);
   }
+});
+
+test('relocation derives the moved workspace prefix and remaps path-like values', () => {
+  assert.deepEqual(buildRelocation('/home/ros/ws/build/pkg', '/home/ubuntu/ws/build/pkg'), {
+    from: '/home/ros',
+    to: '/home/ubuntu',
+  });
+  assert.deepEqual(buildRelocation('/mnt/ws/build/pkg', '/home/ubuntu/ws/build/pkg'), {
+    from: '/mnt',
+    to: '/home/ubuntu',
+  });
+  assert.equal(buildRelocation('/home/ros/ws/build/pkg', '/home/ros/ws/build/pkg'), undefined);
+  const relocation = { from: '/home/ros/ws', to: '/home/ubuntu/ws' };
+  assert.equal(
+    relocate('/home/ros/ws/build/pkg/test_x', relocation),
+    '/home/ubuntu/ws/build/pkg/test_x',
+  );
+  assert.equal(
+    relocate('LD_LIBRARY_PATH=/home/ros/ws/install/a/lib:/home/ros/ws/install/b/lib', relocation),
+    'LD_LIBRARY_PATH=/home/ubuntu/ws/install/a/lib:/home/ubuntu/ws/install/b/lib',
+  );
+  assert.equal(
+    relocate('--gtest_output=xml:/home/ros/ws/build/out.xml', relocation),
+    '--gtest_output=xml:/home/ubuntu/ws/build/out.xml',
+  );
+  assert.equal(relocate('/home/ros/ws2/build/x', relocation), '/home/ros/ws2/build/x');
+  assert.equal(relocate('/opt/ros/humble/lib', undefined), '/opt/ros/humble/lib');
 });

@@ -86,14 +86,18 @@ test(
           for (const name of names) {
             const parameter = Number(name.slice(name.lastIndexOf('/') + 1));
             const text = output.get(name)!.join('');
-            const workload = /^workload seed=\d+ wait_ms=\d+ iterations=\d+ lines=(\d+) checksum=\d+$/m.exec(text);
+            const workload =
+              /^workload seed=\d+ wait_ms=\d+ iterations=\d+ lines=(\d+) checksum=\d+$/m.exec(text);
             assert(workload, 'Each case reports its reproducible workload');
             if (workloads.has(name)) assert.equal(workload[0], workloads.get(name));
             workloads.set(name, workload[0]);
             const lines = text.split('\n').filter((line) => line.startsWith('case '));
             assert.deepEqual(
               lines,
-              Array.from({ length: Number(workload[1]) }, (_, line) => `case ${parameter} output ${line}`),
+              Array.from(
+                { length: Number(workload[1]) },
+                (_, line) => `case ${parameter} output ${line}`,
+              ),
             );
           }
         }
