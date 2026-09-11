@@ -2,5 +2,27 @@
   "cppTestExplorer.sourceRoots": ["test/fixtures/ros2/src"],
   "cppTestExplorer.buildDirectories": ["build/explorer_fixture", "build/scalability"],
   "cppTestExplorer.exclude": ["test/fixtures/ros2/src/vendor"],
-  "cppTestExplorer.parallelMode": "case"
+  "cppTestExplorer.parallelMode": "case",
+  "editor.tokenColorCustomizations": {
+    "textMateRules": [
+      {
+        "scope": "googletest.failed",
+        "settings": {
+          "foreground": "#f00"
+        }
+      },
+      {
+        "scope": "googletest.passed",
+        "settings": {
+          "foreground": "#0f0"
+        }
+      },
+      {
+        "scope": "googletest.run",
+        "settings": {
+          "foreground": "#0f0"
+        }
+      }
+    ]
+  }
 }

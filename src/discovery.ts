@@ -234,9 +234,19 @@ export async function discover(
   return new DiscoverySession(root, settings, scheduler, signal).run();
 }
 
+/** Check for a regular file without treating a missing path as an error. */
+async function isFile(file: string): Promise<boolean> {
+  try {
+    return (await fs.stat(file)).isFile();
+  } catch {
+    return false;
+  }
+}
+
 /** Keep the state of one discovery pass separate from other workspace refreshes. */
 class DiscoverySession {
   private readonly diagnostics: string[] = [];
+  private readonly notes: string[] = [];
   private readonly candidates: Executable[] = [];
   private readonly manual: Executable[] = [];
   private readonly overridden = new Set<string>();
@@ -258,7 +268,7 @@ class DiscoverySession {
 
   /** Collect registrations, apply explicit overrides, and list the resulting tests. */
   async run(): Promise<Discovery> {
-    const { root, settings, signal, diagnostics, watchPaths } = this;
+    const { root, settings, signal, diagnostics, notes, watchPaths } = this;
     this.scan = await scanPackages(root, settings, diagnostics, signal);
     this.scan.watch.forEach((file) => watchPaths.add(file));
     const builds = await this.collectBuildDirectories();
@@ -275,6 +285,7 @@ class DiscoverySession {
     return {
       executables: executables.filter((executable): executable is Executable => !!executable),
       diagnostics,
+      notes,
       watchPaths: [...watchPaths],
     };
   }
@@ -552,8 +563,13 @@ class DiscoverySession {
 
   /** List one binary and keep the cases selected by its CTest registrations. */
   private async listCases(candidate: Executable): Promise<Executable | undefined> {
-    const { scheduler, signal, diagnostics, watchPaths } = this;
+    const { scheduler, signal, diagnostics, notes, watchPaths } = this;
+    // Watch the path even when absent so building the binary triggers rediscovery.
     watchPaths.add(candidate.path);
+    if (!(await isFile(candidate.path))) {
+      notes.push(`${candidate.path}: test executable not built yet; skipped until it exists`);
+      return undefined;
+    }
     try {
       const result = await scheduler.schedule(() => this.readCaseListing(candidate), signal);
       if (result.code !== 0 || result.timedOut || result.cancelled || result.truncated) {

@@ -200,6 +200,7 @@ export class Explorer implements vscode.Disposable {
       discovery.diagnostics.forEach((message) =>
         this.output.appendLine(`[${folder.name}] ${message}`),
       );
+      discovery.notes.forEach((message) => this.output.appendLine(`[${folder.name}] ${message}`));
       discovery.watchPaths.forEach((file) => watches.add(file));
       this.output.appendLine(
         `[${folder.name}] Discovered ${discovery.executables.reduce((count, e) => count + e.cases.length, 0)} cases in ${discovery.executables.length} executables.`,
@@ -221,13 +222,14 @@ export class Explorer implements vscode.Disposable {
       return {
         executables: [],
         diagnostics: ['Invalid C++ Test Explorer settings; see discovery output.'],
+        notes: [],
         watchPaths: [],
       };
     }
     try {
       return await discover(folder.uri.fsPath, settings, this.scheduler, signal);
     } catch (error) {
-      return { executables: [], diagnostics: [String(error)], watchPaths: [] };
+      return { executables: [], diagnostics: [String(error)], notes: [], watchPaths: [] };
     }
   }
 

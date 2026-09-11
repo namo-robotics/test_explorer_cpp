@@ -372,6 +372,24 @@ test('successful empty listings are skipped silently while failed listings still
   }
 });
 
+test('a registered executable that is not built yet is noted, watched and skipped', async () => {
+  const missing = path.join(root, 'build', 'not-built-yet', 'test_missing');
+  const discovery = await discover(
+    root,
+    settings({
+      sourceRoots: [],
+      buildDirectories: [],
+      executables: [{ id: 'missing', path: missing }],
+    }),
+    new Scheduler(1),
+  );
+  assert.deepEqual(discovery.executables, []);
+  assert.deepEqual(discovery.diagnostics, []);
+  assert.equal(discovery.notes.length, 1);
+  assert.match(discovery.notes[0], /not built yet/);
+  assert(discovery.watchPaths.includes(missing));
+});
+
 test('cancelling a batch stops its process and skips batches still in the queue', async () => {
   const selected = ['Process.Slow', 'Basic.Pass', 'Basic.Fail'].map((name) =>
     executable.cases.find((testCase) => testCase.name === name)!,

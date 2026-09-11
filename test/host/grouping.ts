@@ -51,7 +51,7 @@ export function verifyGrouping(): void {
       disabled: false,
       cases,
     };
-    const discovery = { executables: [executable], diagnostics: [], watchPaths: [] };
+    const discovery = { executables: [executable], diagnostics: [], notes: [], watchPaths: [] };
     const configuration = settings();
     const root = tree.updateFolder(folder, configuration, discovery);
     controller.items.replace([root]);

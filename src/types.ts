@@ -67,10 +67,13 @@ export interface Executable {
   testGrouping?: TestGrouping;
   registrations?: { filter: string; disabled: boolean }[];
 }
-/** Discovered programs, diagnostics and files to watch for changes. */
+/** Discovered programs, diagnostics, informational notes and files to watch for changes. */
 export interface Discovery {
   executables: Executable[];
+  /** Problems that need attention; shown as an error on the workspace item. */
   diagnostics: string[];
+  /** Expected conditions such as unbuilt executables; only logged to the output channel. */
+  notes: string[];
   watchPaths: string[];
 }
 /** The reported outcome of a selected test case. */
