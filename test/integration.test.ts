@@ -390,6 +390,23 @@ test('a registered executable that is not built yet is noted, watched and skippe
   assert(discovery.watchPaths.includes(missing));
 });
 
+test('an executable path that exists but is not a regular file is reported as a diagnostic', async () => {
+  const directory = path.join(root, 'build');
+  const discovery = await discover(
+    root,
+    settings({
+      sourceRoots: [],
+      buildDirectories: [],
+      executables: [{ id: 'directory', path: directory }],
+    }),
+    new Scheduler(1),
+  );
+  assert.deepEqual(discovery.executables, []);
+  assert.deepEqual(discovery.notes, []);
+  assert.equal(discovery.diagnostics.length, 1);
+  assert.match(discovery.diagnostics[0], /not a regular file/);
+});
+
 test('cancelling a batch stops its process and skips batches still in the queue', async () => {
   const selected = ['Process.Slow', 'Basic.Pass', 'Basic.Fail'].map((name) =>
     executable.cases.find((testCase) => testCase.name === name)!,

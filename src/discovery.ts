@@ -234,12 +234,16 @@ export async function discover(
   return new DiscoverySession(root, settings, scheduler, signal).run();
 }
 
-/** Check for a regular file without treating a missing path as an error. */
-async function isFile(file: string): Promise<boolean> {
+/** Classify a test binary path: usable, absent (not built), or blocked by another problem. */
+async function inspectFile(
+  file: string,
+): Promise<{ state: 'ok' | 'missing' | 'error'; detail?: string }> {
   try {
-    return (await fs.stat(file)).isFile();
-  } catch {
-    return false;
+    const stats = await fs.stat(file);
+    return stats.isFile() ? { state: 'ok' } : { state: 'error', detail: 'not a regular file' };
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return code === 'ENOENT' ? { state: 'missing' } : { state: 'error', detail: String(e) };
   }
 }
 
@@ -566,8 +570,13 @@ class DiscoverySession {
     const { scheduler, signal, diagnostics, notes, watchPaths } = this;
     // Watch the path even when absent so building the binary triggers rediscovery.
     watchPaths.add(candidate.path);
-    if (!(await isFile(candidate.path))) {
+    const file = await inspectFile(candidate.path);
+    if (file.state === 'missing') {
       notes.push(`${candidate.path}: test executable not built yet; skipped until it exists`);
+      return undefined;
+    }
+    if (file.state === 'error') {
+      diagnostics.push(`${candidate.path}: test executable is not usable (${file.detail})`);
       return undefined;
     }
     try {
