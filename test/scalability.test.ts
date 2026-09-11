@@ -11,7 +11,7 @@ import { hostEnvironment } from '../src/environment';
 import { settings } from './helpers';
 
 test(
-  'one executable discovers and repeatedly runs 1000 verbose cases in batch and case modes',
+  'one executable discovers and repeatedly runs 1000 randomized workloads in batch and case modes',
   { timeout: 60000 },
   async (t) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'cpp-explorer-scale-'));
@@ -39,6 +39,7 @@ test(
       const names = new Set(executable.cases.map((test) => test.name));
       assert.equal(names.size, 1000);
       assert(executable.cases.every((test) => test.source));
+      const workloads = new Map<string, string>();
       for (const mode of ['batch', 'case'] as const) {
         for (let iteration = 0; iteration < 3; iteration++) {
           const started = new Set<string>();
@@ -84,14 +85,15 @@ test(
           assert.deepEqual(finished, names);
           for (const name of names) {
             const parameter = Number(name.slice(name.lastIndexOf('/') + 1));
-            const lines = output
-              .get(name)!
-              .join('')
-              .split('\n')
-              .filter((line) => line.startsWith('case '));
+            const text = output.get(name)!.join('');
+            const workload = /^workload seed=\d+ wait_ms=\d+ iterations=\d+ lines=(\d+) checksum=\d+$/m.exec(text);
+            assert(workload, 'Each case reports its reproducible workload');
+            if (workloads.has(name)) assert.equal(workload[0], workloads.get(name));
+            workloads.set(name, workload[0]);
+            const lines = text.split('\n').filter((line) => line.startsWith('case '));
             assert.deepEqual(
               lines,
-              Array.from({ length: 100 }, (_, line) => `case ${parameter} output ${line}`),
+              Array.from({ length: Number(workload[1]) }, (_, line) => `case ${parameter} output ${line}`),
             );
           }
         }
